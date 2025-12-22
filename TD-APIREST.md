@@ -1,89 +1,134 @@
-# TD : Découverte des API REST avec Node.js et Express
-**Niveau :** Débutant  
-**Durée estimée :** 30 - 45 minutes
+# TD : Créer une API qui stocke des données (Node.js + Express)
+**Niveau :** Intermédiaire  
+**Durée estimée :** 45 - 60 minutes
 
 ---
 
-## Objectif
-Comprendre comment créer une petite application où :
-1. **Node.js (Serveur)** va chercher des données sur une API distante.
-2. **HTML/JS (Client)** affiche ces données sans recharger la page.
+##  Objectif
+Nous allons créer une application plus avancée. Au lieu de simplement afficher des données, notre serveur va :
+1.  **Importer** des données depuis une API externe (Google/JSONPlaceholder).
+2.  **Stocker** ces données dans un fichier local (`base_de_donnees.json`) sur votre ordinateur.
+3.  **Relire** ce fichier pour afficher les données.
 
-Nous n'utiliserons pas de moteur de template complexe, juste du HTML et du JavaScript standard.
+C'est le principe de base d'une base de données !
 
 ---
 
 ## 1. Architecture de l'application
 
-Voici comment cela va fonctionner :
-1. Le **Navigateur** demande la page d'accueil (`index.html`).
-2. La page **HTML** contient un script **JS** qui demande les données à notre serveur Node.js.
-3. Le serveur **Node.js** demande les données à l'API externe (JSONPlaceholder).
-4. Le serveur **Node.js** renvoie les données au navigateur.
-5. Le **JavaScript** du navigateur crée les cartes et les affiche.
+Voici un schéma visuel pour comprendre comment les données circulent entre votre navigateur, votre serveur, le fichier sur votre disque et l'API externe.
+
+```mermaid
+graph TD
+    subgraph "Votre Ordinateur (Localhost)"
+        Browser[" Navigateur (Client)<br>(index.html + JS)"]
+        Node[" Serveur Node.js<br>(app.js)"]
+        File[(" Fichier Local<br>(users.json)")]
+    end
+
+    Internet[" Internet<br>(API JSONPlaceholder)"]
+
+    %% Flux 1 : Importation
+    Browser -- "1. Clic 'Importer'" --> Node
+    Node -- "2. Demande données" --> Internet
+    Internet -- "3. Envoie données" --> Node
+    Node -- "4. Écrit fichier" --> File
+
+    %% Flux 2 : Lecture
+    Browser -- "5. Clic 'Lire'" --> Node
+    Node -- "6. Lit fichier" --> File
+    File -- "7. Contenu JSON" --> Node
+    Node -- "8. Affiche données" --> Browser
+
+    style Browser fill:#e1f5fe,stroke:#01579b
+    style Node fill:#e8f5e9,stroke:#2e7d32
+    style File fill:#fff9c4,stroke:#fbc02d
+    style Internet fill:#f3e5f5,stroke:#7b1fa2
+```
+
+### Explication détaillée des flux :
+
+1.  **Flux d'Importation (Bouton 1)** :
+    *   Le navigateur envoie une commande au serveur (`/api/importer`).
+    *   Le serveur joue le rôle de "client" et va chercher les données sur Internet (API JSONPlaceholder).
+    *   Une fois reçues, le serveur **sauvegarde** ces données dans un fichier `users.json` sur votre disque dur.
+2.  **Flux de Lecture (Bouton 2)** :
+    *   Le navigateur demande les données (`/api/utilisateurs`).
+    *   Le serveur **lit** simplement le fichier `users.json` local (il n'a plus besoin d'Internet).
+    *   Le serveur renvoie les données au navigateur pour qu'elles soient affichées.
 
 ---
 
 ## 2. Préparation du projet
 
-### Étape 1 : Créer le dossier
-Créez un nouveau dossier nommé `mon-td-api`.
-Ouvrez ce dossier avec VS Code.
+### Étape 1 : Initialisation
+Créez un dossier `mon-api-stockage`, ouvrez-le avec VS Code.
 
-### Étape 2 : Initialiser le projet
-Ouvrez le terminal dans VS Code et tapez :
-
+Dans le terminal :
 ```bash
 npm init -y
-```
-
-### Étape 3 : Installer les outils
-Nous avons besoin de 1 seul outil :
-1. **express** : Pour créer notre serveur web.
-
-*(Note : Nous utiliserons `fetch` qui est inclus dans Node.js pour récupérer les données, donc pas besoin d'installer autre chose !)*
-
-Tapez dans le terminal :
-```bash
 npm install express
 ```
 
 ---
 
-## 3. Le Serveur (Node.js)
+## 3. Le Serveur (Node.js + File System)
 
-Créez un fichier nommé `app.js` à la racine.
-Ce serveur va servir les fichiers statiques (HTML) et agir comme une passerelle pour les données.
+Créez le fichier `app.js`.
+Nous allons utiliser le module `fs` (File System) qui est intégré à Node.js pour créer et lire des fichiers.
 
 ```javascript
 const express = require('express');
+const fs = require('fs').promises; // Module pour gérer les fichiers (avec promesses)
+const path = require('path');
 const app = express();
 
-// 1. On indique à Express de servir les fichiers du dossier "public" (notre HTML/CSS/JS)
+// Nom du fichier où on va stocker nos données
+const FICHIER_DONNEES = 'users.json';
+
 app.use(express.static('public'));
 
-// 2. On crée une route API pour notre site
-// Notre site appellera cette route pour avoir les données
-app.get('/api/utilisateurs', async (req, res) => {
+// --- ROUTE 1 : IMPORTER ET SAUVEGARDER ---
+// Cette route va chercher les données dehors et les enregistre chez nous
+app.get('/api/importer', async (req, res) => {
     try {
-        console.log('Le serveur récupère les données...');
-        
-        // Le serveur va chercher les infos chez JSONPlaceholder avec fetch (natif)
+        console.log("1. Récupération des données externes...");
         const reponse = await fetch('https://jsonplaceholder.typicode.com/users');
-        
-        // On transforme la réponse en JSON
         const utilisateurs = await reponse.json();
-        
-        // Le serveur renvoie les données au navigateur
-        res.json(utilisateurs);
-        
+
+        console.log("2. Sauvegarde dans le fichier...");
+        // On transforme l'objet JS en texte JSON pour l'écrire
+        await fs.writeFile(FICHIER_DONNEES, JSON.stringify(utilisateurs, null, 2));
+
+        res.send(`Succès ! ${utilisateurs.length} utilisateurs ont été sauvegardés dans ${FICHIER_DONNEES}.`);
     } catch (error) {
         console.error(error);
-        res.status(500).send("Erreur serveur");
+        res.status(500).send("Erreur lors de l'importation.");
     }
 });
 
-// 3. Démarrage du serveur
+// --- ROUTE 2 : LIRE NOS DONNÉES LOCALES ---
+// Cette route lit uniquement notre fichier local
+app.get('/api/utilisateurs', async (req, res) => {
+    try {
+        // On vérifie d'abord si le fichier existe
+        try {
+            await fs.access(FICHIER_DONNEES);
+        } catch {
+            return res.json([]); // Si pas de fichier, on renvoie une liste vide
+        }
+
+        // On lit le fichier
+        const data = await fs.readFile(FICHIER_DONNEES, 'utf-8');
+        const utilisateurs = JSON.parse(data); // On transforme le texte en objet JS
+        
+        res.json(utilisateurs);
+    } catch (error) {
+        console.error(error);
+        res.status(500).send("Erreur de lecture.");
+    }
+});
+
 app.listen(3000, () => {
     console.log('Serveur lancé sur http://localhost:3000');
 });
@@ -91,91 +136,86 @@ app.listen(3000, () => {
 
 ---
 
-## 4. L'Interface (HTML + JavaScript)
+## 4. L'Interface (HTML + JS)
 
-Nous allons séparer le code. Créez un dossier nommé `public` à la racine du projet.
-Dans ce dossier `public`, créez un fichier `index.html`.
-
-### Le fichier `public/index.html`
+Créez un dossier `public` et dedans un fichier `index.html`.
 
 ```html
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Mes Utilisateurs API</title>
+    <title>Mon Stockage de Données</title>
     <style>
-        body { font-family: sans-serif; background-color: #f4f4f9; padding: 20px; }
-        h1 { text-align: center; color: #333; }
-        button { display: block; margin: 0 auto 20px; padding: 10px 20px; cursor: pointer; }
+        body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .actions { display: flex; gap: 10px; margin-bottom: 20px; }
+        button { padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 5px; }
+        button:hover { background: #0056b3; }
+        button.secondary { background: #28a745; }
         
-        .container { 
-            display: flex; 
-            flex-wrap: wrap; 
-            justify-content: center; 
-            gap: 20px; 
-        }
+        .status { padding: 10px; background: #e9ecef; border-radius: 5px; margin-bottom: 20px; }
         
-        .carte {
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            width: 250px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
-        }
-        .carte:hover { transform: translateY(-5px); }
-        .nom { color: #2c3e50; font-weight: bold; font-size: 1.1em; margin-bottom: 5px; }
-        .email { color: #7f8c8d; font-size: 0.9em; margin-bottom: 10px; }
+        .user-item { border-bottom: 1px solid #eee; padding: 10px 0; }
+        .user-item strong { color: #333; }
     </style>
 </head>
 <body>
 
-    <h1>Annuaire des Utilisateurs</h1>
-    
-    <!-- Un bouton pour charger les données -->
-    <button onclick="chargerUtilisateurs()">Charger la liste</button>
+    <h1>Gestion des Utilisateurs</h1>
 
-    <!-- L'endroit où les cartes vont s'afficher -->
-    <div class="container" id="liste-utilisateurs">
-        <!-- Les cartes seront ajoutées ici par le JavaScript -->
+    <div class="actions">
+        <button onclick="importerDonnees()">1. Importer & Sauvegarder (Serveur)</button>
+        <button class="secondary" onclick="afficherDonnees()">2. Lire mes données locales</button>
     </div>
 
+    <div id="status" class="status">En attente d'action...</div>
+
+    <div id="liste"></div>
+
     <script>
-        // Fonction appelée quand on clique sur le bouton
-        async function chargerUtilisateurs() {
-            const conteneur = document.getElementById('liste-utilisateurs');
-            conteneur.innerHTML = '<p>Chargement en cours...</p>';
+        const statusDiv = document.getElementById('status');
+        const listeDiv = document.getElementById('liste');
 
+        // Action 1 : Demander au serveur de télécharger et stocker les données
+        async function importerDonnees() {
+            statusDiv.textContent = "Importation en cours...";
             try {
-                // 1. On demande les données à NOTRE serveur Node.js
-                const reponse = await fetch('/api/utilisateurs');
-                const utilisateurs = await reponse.json();
+                const res = await fetch('/api/importer');
+                const message = await res.text();
+                statusDiv.textContent = message;
+                statusDiv.style.backgroundColor = "#d4edda"; // Vert clair
+            } catch (err) {
+                statusDiv.textContent = "Erreur lors de l'importation.";
+                statusDiv.style.backgroundColor = "#f8d7da"; // Rouge clair
+            }
+        }
 
-                // 2. On vide le message de chargement
-                conteneur.innerHTML = '';
+        // Action 2 : Demander au serveur de lire le fichier local
+        async function afficherDonnees() {
+            statusDiv.textContent = "Lecture du fichier local...";
+            listeDiv.innerHTML = "";
+            
+            try {
+                const res = await fetch('/api/utilisateurs');
+                const users = await res.json();
 
-                // 3. Pour chaque utilisateur, on crée le HTML
-                utilisateurs.forEach(user => {
-                    // Création de la div carte
-                    const carte = document.createElement('div');
-                    carte.className = 'carte';
+                if (users.length === 0) {
+                    statusDiv.textContent = "Aucune donnée locale trouvée. Cliquez sur Importer d'abord !";
+                    return;
+                }
 
-                    // Remplissage du contenu
-                    carte.innerHTML = `
-                        <div class="nom">${user.name}</div>
-                        <div class="email">${user.email}</div>
-                        <div> ${user.company.name}</div>
-                        <div> ${user.phone}</div>
-                    `;
+                statusDiv.textContent = `Lecture terminée : ${users.length} utilisateurs trouvés dans le fichier JSON.`;
 
-                    // Ajout à la page
-                    conteneur.appendChild(carte);
+                users.forEach(user => {
+                    const div = document.createElement('div');
+                    div.className = 'user-item';
+                    div.innerHTML = `<strong>${user.name}</strong> - ${user.email} (Ville: ${user.address.city})`;
+                    listeDiv.appendChild(div);
                 });
 
-            } catch (error) {
-                console.error('Erreur:', error);
-                conteneur.innerHTML = '<p style="color:red">Erreur lors du chargement.</p>';
+            } catch (err) {
+                console.error(err);
+                statusDiv.textContent = "Erreur lors de l'affichage.";
             }
         }
     </script>
@@ -185,19 +225,21 @@ Dans ce dossier `public`, créez un fichier `index.html`.
 
 ---
 
-## 5. Lancer et Tester
+## 5. Tester le fonctionnement
 
-1. Dans le terminal :
-```bash
-node app.js
-```
-2. Ouvrez votre navigateur sur **http://localhost:3000**
-3. Cliquez sur le bouton "Charger la liste".
-4. Observez : La page ne se recharge pas, mais les données apparaissent !
+1.  Lancez le serveur : `node app.js`
+2.  Allez sur `http://localhost:3000`
+3.  **Test 1** : Cliquez sur "Lire mes données locales".
+    *   *Résultat attendu* : "Aucune donnée locale trouvée", car le fichier `users.json` n'existe pas encore.
+4.  **Test 2** : Cliquez sur "Importer & Sauvegarder".
+    *   *Résultat attendu* : "Succès ! 10 utilisateurs sauvegardés...".
+    *   *Vérification* : Regardez dans votre dossier VS Code, un fichier `users.json` est apparu !
+5.  **Test 3** : Cliquez à nouveau sur "Lire mes données locales".
+    *   *Résultat attendu* : La liste des utilisateurs s'affiche.
 
 ---
 
-## 6. Exercices pour aller plus loin
+## 6. Exercice Bonus
 
-1. **Ajouter du style** : Modifiez le CSS pour changer la couleur des cartes selon si l'utilisateur a un site web (`.com`, `.org`...).
-2. **Nouvelle route** : Ajoutez une route `/api/posts` dans `app.js` pour récupérer les articles (`https://jsonplaceholder.typicode.com/posts`) et créez un deuxième bouton dans le HTML pour les afficher.
+Ajoutez un formulaire simple dans le HTML (Nom, Email) et créez une route `POST /api/ajouter` dans `app.js` pour ajouter un nouvel utilisateur à votre fichier `users.json`.
+*Indice : Il faudra lire le fichier, ajouter l'objet au tableau, et réécrire le fichier.*

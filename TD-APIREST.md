@@ -4,7 +4,7 @@
 
 ---
 
-##  Objectif
+## 🎯 Objectif
 Nous allons créer une application plus avancée. Au lieu de simplement afficher des données, notre serveur va :
 1.  **Importer** des données depuis une API externe (Google/JSONPlaceholder).
 2.  **Stocker** ces données dans un fichier local (`base_de_donnees.json`) sur votre ordinateur.
@@ -21,12 +21,12 @@ Voici un schéma visuel pour comprendre comment les données circulent entre vot
 ```mermaid
 graph TD
     subgraph "Votre Ordinateur (Localhost)"
-        Browser[" Navigateur (Client)<br>(index.html + JS)"]
-        Node[" Serveur Node.js<br>(app.js)"]
-        File[(" Fichier Local<br>(users.json)")]
+        Browser["🖥️ Navigateur (Client)<br>(index.html + JS)"]
+        Node["⚙️ Serveur Node.js<br>(app.js)"]
+        File[("📁 Fichier Local<br>(users.json)")]
     end
 
-    Internet[" Internet<br>(API JSONPlaceholder)"]
+    Internet["☁️ Internet<br>(API JSONPlaceholder)"]
 
     %% Flux 1 : Importation
     Browser -- "1. Clic 'Importer'" --> Node
@@ -72,63 +72,84 @@ npm install express
 
 ---
 
-## 3. Le Serveur (Node.js + File System)
+## 3. Organisation du Code (Routes séparées)
 
-Créez le fichier `app.js`.
-Nous allons utiliser le module `fs` (File System) qui est intégré à Node.js pour créer et lire des fichiers.
+Pour rendre notre application professionnelle et facile à maintenir (architecture modulaire), nous n'allons pas tout écrire dans `app.js`.
+Nous allons séparer la logique des routes dans un fichier à part. C'est une première étape vers une architecture "microservices".
+
+### Étape 1 : Le fichier de routes
+1.  Créez un dossier nommé `routes` à la racine.
+2.  Dans ce dossier, créez un fichier `utilisateurs.js`.
+
+Copiez ce code dans `routes/utilisateurs.js` :
 
 ```javascript
 const express = require('express');
-const fs = require('fs').promises; // Module pour gérer les fichiers (avec promesses)
-const path = require('path');
-const app = express();
+const router = express.Router(); // On crée un "mini-routeur"
+const fs = require('fs').promises;
 
-// Nom du fichier où on va stocker nos données
 const FICHIER_DONNEES = 'users.json';
 
-app.use(express.static('public'));
-
-// --- ROUTE 1 : IMPORTER ET SAUVEGARDER ---
-// Cette route va chercher les données dehors et les enregistre chez nous
-app.get('/api/importer', async (req, res) => {
+// --- ROUTE 1 : IMPORTER (/api/importer) ---
+// Notez qu'on utilise "/" ici, car le préfixe "/api" sera défini dans app.js
+router.get('/importer', async (req, res) => {
     try {
         console.log("1. Récupération des données externes...");
         const reponse = await fetch('https://jsonplaceholder.typicode.com/users');
         const utilisateurs = await reponse.json();
 
         console.log("2. Sauvegarde dans le fichier...");
-        // On transforme l'objet JS en texte JSON pour l'écrire
         await fs.writeFile(FICHIER_DONNEES, JSON.stringify(utilisateurs, null, 2));
 
-        res.send(`Succès ! ${utilisateurs.length} utilisateurs ont été sauvegardés dans ${FICHIER_DONNEES}.`);
+        res.send(`Succès ! ${utilisateurs.length} utilisateurs sauvegardés.`);
     } catch (error) {
         console.error(error);
         res.status(500).send("Erreur lors de l'importation.");
     }
 });
 
-// --- ROUTE 2 : LIRE NOS DONNÉES LOCALES ---
-// Cette route lit uniquement notre fichier local
-app.get('/api/utilisateurs', async (req, res) => {
+// --- ROUTE 2 : LIRE (/api/utilisateurs) ---
+router.get('/utilisateurs', async (req, res) => {
     try {
-        // On vérifie d'abord si le fichier existe
         try {
             await fs.access(FICHIER_DONNEES);
         } catch {
-            return res.json([]); // Si pas de fichier, on renvoie une liste vide
+            return res.json([]);
         }
 
-        // On lit le fichier
         const data = await fs.readFile(FICHIER_DONNEES, 'utf-8');
-        const utilisateurs = JSON.parse(data); // On transforme le texte en objet JS
-        
-        res.json(utilisateurs);
+        res.json(JSON.parse(data));
     } catch (error) {
         console.error(error);
         res.status(500).send("Erreur de lecture.");
     }
 });
 
+// On exporte le routeur pour pouvoir l'utiliser dans app.js
+module.exports = router;
+```
+
+### Étape 2 : Le Serveur Principal (`app.js`)
+
+Maintenant, `app.js` devient très simple. Son seul travail est de configurer le serveur et de charger les routes.
+
+Modifiez le fichier `app.js` :
+
+```javascript
+const express = require('express');
+const app = express();
+
+// 1. Importation de nos routes
+const utilisateursRoutes = require('./routes/utilisateurs');
+
+// 2. Configuration
+app.use(express.static('public'));
+
+// 3. Utilisation des routes
+// On dit : "Pour toutes les adresses commençant par /api, utilise le fichier utilisateursRoutes"
+app.use('/api', utilisateursRoutes);
+
+// 4. Démarrage
 app.listen(3000, () => {
     console.log('Serveur lancé sur http://localhost:3000');
 });

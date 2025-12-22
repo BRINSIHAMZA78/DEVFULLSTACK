@@ -535,199 +535,139 @@ header p {
 
 #### `app.js`
 ```javascript
-// Sélection des éléments DOM
-const loadUsersBtn = document.getElementById('loadUsers');
-const loadProductsBtn = document.getElementById('loadProducts');
-const clearDataBtn = document.getElementById('clearData');
+// ÉTAPE 1 : Récupérer les éléments HTML
 const resultsDiv = document.getElementById('results');
 const loadingDiv = document.getElementById('loading');
 const errorDiv = document.getElementById('error');
 
-// Fonction pour afficher le chargement
-function showLoading() {
+// ÉTAPE 2 : Fonction pour charger les utilisateurs
+function loadUsers() {
+    // Afficher le chargement
     loadingDiv.classList.remove('hidden');
     resultsDiv.innerHTML = '';
-    errorDiv.classList.add('hidden');
-}
-
-// Fonction pour cacher le chargement
-function hideLoading() {
-    loadingDiv.classList.add('hidden');
-}
-
-// Fonction pour afficher une erreur
-function showError(message) {
-    errorDiv.innerHTML = `
-        <strong>❌ Erreur :</strong> ${message}
-    `;
-    errorDiv.classList.remove('hidden');
-}
-
-// Fonction pour charger les utilisateurs
-async function loadUsers() {
-    showLoading();
     
-    try {
-        // Simulation d'un délai réseau
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Fetch API - Récupération des données
-        const response = await fetch('data/users.json');
-        
-        // Vérification du statut de la réponse
-        if (!response.ok) {
-            throw new Error(`Erreur HTTP: ${response.status}`);
-        }
-        
-        // Conversion de la réponse en JSON
-        const data = await response.json();
-        
-        // Affichage des utilisateurs
-        displayUsers(data.users);
-        
-    } catch (error) {
-        showError(`Impossible de charger les utilisateurs: ${error.message}`);
-        console.error('Erreur:', error);
-    } finally {
-        hideLoading();
-    }
-}
-
-// Fonction pour afficher les utilisateurs
-function displayUsers(users) {
-    resultsDiv.innerHTML = `
-        <h2>Utilisateurs chargés (${users.length})</h2>
-        ${users.map(user => `
-            <div class="user-card">
-                <div class="user-header">
-                    <span class="user-name">👤 ${user.nom}</span>
-                    <span class="badge ${user.actif ? 'badge-active' : 'badge-inactive'}">
-                        ${user.actif ? '✓ Actif' : '✗ Inactif'}
-                    </span>
-                </div>
-                <div class="user-info">
-                    <p><strong>📧 Email:</strong> ${user.email}</p>
-                    <p><strong>🎭 Rôle:</strong> ${user.role}</p>
-                    <p><strong>🆔 ID:</strong> ${user.id}</p>
-                </div>
-            </div>
-        `).join('')}
-    `;
-}
-
-// Fonction pour charger les produits
-async function loadProducts() {
-    showLoading();
-    
-    try {
-        // Simulation d'un délai réseau
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Fetch API - Récupération des données
-        const response = await fetch('data/products.json');
-        
-        // Vérification du statut de la réponse
-        if (!response.ok) {
-            throw new Error(`Erreur HTTP: ${response.status}`);
-        }
-        
-        // Conversion de la réponse en JSON
-        const data = await response.json();
-        
-        // Affichage des produits
-        displayProducts(data.products);
-        
-    } catch (error) {
-        showError(`Impossible de charger les produits: ${error.message}`);
-        console.error('Erreur:', error);
-    } finally {
-        hideLoading();
-    }
-}
-
-// Fonction pour afficher les produits
-function displayProducts(products) {
-    resultsDiv.innerHTML = `
-        <h2>Produits disponibles (${products.length})</h2>
-        ${products.map(product => `
-            <div class="product-card">
-                <div class="product-header">
-                    <div style="display: flex; align-items: center;">
-                        <span class="product-icon">${product.image}</span>
-                        <div>
-                            <div class="product-name">${product.nom}</div>
-                            <small style="color: #718096;">Catégorie: ${product.categorie}</small>
-                        </div>
+    // Appeler l'API pour récupérer les données
+    fetch('data/users.json')
+        .then(response => response.json())  // Convertir en JSON
+        .then(data => {
+            // Cacher le chargement
+            loadingDiv.classList.add('hidden');
+            
+            // Afficher les utilisateurs
+            let html = '<h2>👥 Liste des Utilisateurs</h2>';
+            
+            data.users.forEach(user => {
+                html += `
+                    <div class="user-card">
+                        <h3>${user.nom}</h3>
+                        <p>� ${user.email}</p>
+                        <p>🎭 ${user.role}</p>
+                        <p>Statut: ${user.actif ? '✅ Actif' : '❌ Inactif'}</p>
                     </div>
-                    <span class="price">${product.prix.toFixed(2)} €</span>
-                </div>
-                <div class="product-info">
-                    <p><strong>🆔 ID:</strong> ${product.id}</p>
-                    <p><strong>📦 Stock:</strong> <span class="stock">${product.stock} unités</span></p>
-                </div>
-            </div>
-        `).join('')}
-    `;
+                `;
+            });
+            
+            resultsDiv.innerHTML = html;
+        })
+        .catch(error => {
+            // En cas d'erreur
+            loadingDiv.classList.add('hidden');
+            errorDiv.innerHTML = '❌ Erreur : ' + error.message;
+            errorDiv.classList.remove('hidden');
+        });
 }
 
-// Fonction pour effacer les données
-function clearData() {
+// ÉTAPE 3 : Fonction pour charger les produits
+function loadProducts() {
+    // Afficher le chargement
+    loadingDiv.classList.remove('hidden');
     resultsDiv.innerHTML = '';
+    
+    // Appeler l'API pour récupérer les données
+    fetch('data/products.json')
+        .then(response => response.json())  // Convertir en JSON
+        .then(data => {
+            // Cacher le chargement
+            loadingDiv.classList.add('hidden');
+            
+            // Afficher les produits
+            let html = '<h2>🛍️ Liste des Produits</h2>';
+            
+            data.products.forEach(product => {
+                html += `
+                    <div class="product-card">
+                        <h3>${product.image} ${product.nom}</h3>
+                        <p><strong>Prix:</strong> ${product.prix} €</p>
+                        <p><strong>Catégorie:</strong> ${product.categorie}</p>
+                        <p><strong>Stock:</strong> ${product.stock} unités</p>
+                    </div>
+                `;
+            });
+            
+            resultsDiv.innerHTML = html;
+        })
+        .catch(error => {
+            // En cas d'erreur
+            loadingDiv.classList.add('hidden');
+            errorDiv.innerHTML = '❌ Erreur : ' + error.message;
+            errorDiv.classList.remove('hidden');
+        });
+}
+
+// ÉTAPE 4 : Fonction pour effacer
+function clearData() {
+    resultsDiv.innerHTML = '<p>Cliquez sur un bouton pour charger les données</p>';
     errorDiv.classList.add('hidden');
 }
 
-// Ajout des événements sur les boutons
-loadUsersBtn.addEventListener('click', loadUsers);
-loadProductsBtn.addEventListener('click', loadProducts);
-clearDataBtn.addEventListener('click', clearData);
-
-// Message de bienvenue
-resultsDiv.innerHTML = `
-    <div style="text-align: center; padding: 40px; color: #718096;">
-        <h2 style="color: #667eea;">👋 Bienvenue dans le TD API REST</h2>
-        <p>Cliquez sur les boutons ci-dessus pour charger les données</p>
-    </div>
-`;
+// ÉTAPE 5 : Connecter les boutons aux fonctions
+document.getElementById('loadUsers').onclick = loadUsers;
+document.getElementById('loadProducts').onclick = loadProducts;
+document.getElementById('clearData').onclick = clearData;
 ```
 
-### 📝 Explications du code JavaScript
+### 📝 Explications du code JavaScript (ligne par ligne)
 
-#### 1. **Fetch API**
+#### 1. **Fetch API - Appeler l'API**
 ```javascript
-const response = await fetch('data/users.json');
+fetch('data/users.json')
 ```
-- `fetch()` est une fonction moderne pour faire des requêtes HTTP
-- Retourne une **Promise** (promesse)
-- `await` attend que la promesse soit résolue
+- `fetch()` = fonction pour récupérer des données
+- On lui donne le chemin du fichier JSON
 
-#### 2. **Async/Await**
+#### 2. **Convertir la réponse en JSON**
 ```javascript
-async function loadUsers() {
-    // Code asynchrone
-}
+.then(response => response.json())
 ```
-- `async` indique une fonction asynchrone
-- `await` met en pause l'exécution jusqu'à la résolution de la promesse
+- `.then()` = "quand la réponse arrive, fais ceci"
+- `response.json()` = transforme la réponse en objet JavaScript
 
-#### 3. **Try/Catch**
+#### 3. **Utiliser les données**
 ```javascript
-try {
-    // Code qui peut générer une erreur
-} catch (error) {
-    // Gestion de l'erreur
-}
+.then(data => {
+    // Ici on a nos données !
+    console.log(data);
+})
 ```
-- Permet de capturer et gérer les erreurs
+- On reçoit les données et on peut les afficher
 
-#### 4. **Traitement de la réponse**
+#### 4. **Gérer les erreurs**
 ```javascript
-if (!response.ok) {
-    throw new Error(`Erreur HTTP: ${response.status}`);
-}
-const data = await response.json();
+.catch(error => {
+    // Si quelque chose ne marche pas
+    console.log('Erreur:', error);
+})
 ```
-- Vérification du statut de la réponse
-- Conversion en JSON
+- `.catch()` = attrape les erreurs
+
+#### 5. **Boucle forEach pour afficher**
+```javascript
+data.users.forEach(user => {
+    // Pour chaque utilisateur, on crée du HTML
+    html += '<div>' + user.nom + '</div>';
+});
+```
+- `forEach()` = parcourt tous les éléments du tableau
 
 ### 🚀 Pour tester l'application
 
@@ -796,86 +736,29 @@ projet-api-publique/
         <header>
             <h1>🌍 TD API REST - Exercice 2</h1>
             <p>Consommer une API publique sur Internet</p>
-            <small>API: JSONPlaceholder</small>
         </header>
 
-        <div class="tabs">
-            <button class="tab-btn active" data-tab="users">
-                👥 Utilisateurs
-            </button>
-            <button class="tab-btn" data-tab="posts">
-                📝 Posts
-            </button>
-            <button class="tab-btn" data-tab="photos">
-                📸 Photos
-            </button>
-            <button class="tab-btn" data-tab="search">
-                🔍 Recherche
-            </button>
+        <div class="buttons">
+            <button id="loadUsers" class="btn btn-primary">👥 Utilisateurs</button>
+            <button id="loadPosts" class="btn btn-success">📝 Posts</button>
+            <button id="loadPhotos" class="btn btn-info">📸 Photos</button>
         </div>
 
-        <div id="users-tab" class="tab-content active">
-            <div class="action-bar">
-                <button id="loadAllUsers" class="btn btn-primary">
-                    Charger tous les utilisateurs
-                </button>
-                <button id="loadRandomUser" class="btn btn-secondary">
-                    Utilisateur aléatoire
-                </button>
-            </div>
-        </div>
-
-        <div id="posts-tab" class="tab-content">
-            <div class="action-bar">
-                <button id="loadAllPosts" class="btn btn-primary">
-                    Charger tous les posts
-                </button>
-                <input type="number" id="userIdInput" placeholder="ID utilisateur" min="1" max="10">
-                <button id="loadUserPosts" class="btn btn-secondary">
-                    Posts d'un utilisateur
-                </button>
-            </div>
-        </div>
-
-        <div id="photos-tab" class="tab-content">
-            <div class="action-bar">
-                <button id="loadPhotos" class="btn btn-primary">
-                    Charger des photos
-                </button>
-                <input type="number" id="photoLimit" placeholder="Nombre (1-20)" min="1" max="20" value="6">
-            </div>
-        </div>
-
-        <div id="search-tab" class="tab-content">
-            <div class="search-bar">
-                <input type="text" id="searchInput" placeholder="Rechercher un post...">
-                <button id="searchBtn" class="btn btn-primary">🔍 Rechercher</button>
-            </div>
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="Rechercher un post...">
+            <button id="searchBtn" class="btn btn-primary">🔍 Rechercher</button>
         </div>
 
         <div id="loading" class="loading hidden">
             <div class="spinner"></div>
-            <p>Chargement des données depuis l'API...</p>
+            <p>Chargement...</p>
         </div>
 
         <div id="error" class="error hidden"></div>
 
-        <div id="stats" class="stats hidden">
-            <div class="stat-item">
-                <span class="stat-label">⏱️ Temps de réponse:</span>
-                <span id="responseTime" class="stat-value">-</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">📊 Éléments chargés:</span>
-                <span id="itemsCount" class="stat-value">-</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">🌐 Statut HTTP:</span>
-                <span id="httpStatus" class="stat-value">-</span>
-            </div>
+        <div id="results" class="results">
+            <p>Cliquez sur un bouton pour charger les données</p>
         </div>
-
-        <div id="results" class="results"></div>
     </div>
 
     <script src="app.js"></script>
@@ -894,14 +777,14 @@ projet-api-publique/
 }
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: Arial, sans-serif;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     min-height: 100vh;
     padding: 20px;
 }
 
 .container {
-    max-width: 1400px;
+    max-width: 1200px;
     margin: 0 auto;
 }
 
@@ -911,7 +794,7 @@ header {
     border-radius: 10px;
     text-align: center;
     margin-bottom: 30px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
 }
 
 header h1 {
@@ -919,64 +802,11 @@ header h1 {
     margin-bottom: 10px;
 }
 
-header p {
-    color: #666;
-    margin-bottom: 5px;
-}
-
-header small {
-    color: #999;
-    font-style: italic;
-}
-
-.tabs {
+.buttons {
     display: flex;
-    gap: 10px;
+    gap: 15px;
+    justify-content: center;
     margin-bottom: 20px;
-    flex-wrap: wrap;
-}
-
-.tab-btn {
-    flex: 1;
-    padding: 15px;
-    border: none;
-    background: white;
-    border-radius: 8px;
-    font-size: 16px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: all 0.3s;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
-}
-
-.tab-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-}
-
-.tab-btn.active {
-    background: #667eea;
-    color: white;
-}
-
-.tab-content {
-    display: none;
-}
-
-.tab-content.active {
-    display: block;
-}
-
-.action-bar {
-    background: white;
-    padding: 20px;
-    border-radius: 10px;
-    margin-bottom: 20px;
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    align-items: center;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
 }
 
 .search-bar {
@@ -986,23 +816,14 @@ header small {
     margin-bottom: 20px;
     display: flex;
     gap: 10px;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
 }
 
 .search-bar input {
     flex: 1;
-    padding: 12px;
-    border: 2px solid #e2e8f0;
+    padding: 10px;
+    border: 2px solid #ddd;
     border-radius: 5px;
     font-size: 16px;
-}
-
-input[type="number"] {
-    padding: 12px;
-    border: 2px solid #e2e8f0;
-    border-radius: 5px;
-    font-size: 16px;
-    width: 150px;
 }
 
 .btn {
@@ -1011,22 +832,24 @@ input[type="number"] {
     border-radius: 5px;
     font-size: 16px;
     cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
     color: white;
     font-weight: bold;
 }
 
 .btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    opacity: 0.9;
 }
 
 .btn-primary {
     background: #667eea;
 }
 
-.btn-secondary {
+.btn-success {
     background: #48bb78;
+}
+
+.btn-info {
+    background: #0bc5ea;
 }
 
 .loading {
@@ -1063,117 +886,32 @@ input[type="number"] {
     padding: 20px;
     border-radius: 10px;
     margin-bottom: 20px;
-    border-left: 5px solid #f56565;
-}
-
-.stats {
-    background: white;
-    padding: 20px;
-    border-radius: 10px;
-    margin-bottom: 20px;
-    display: flex;
-    justify-content: space-around;
-    flex-wrap: wrap;
-    gap: 20px;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
-}
-
-.stat-item {
-    text-align: center;
-}
-
-.stat-label {
-    display: block;
-    color: #718096;
-    font-size: 14px;
-    margin-bottom: 5px;
-}
-
-.stat-value {
-    display: block;
-    color: #667eea;
-    font-size: 24px;
-    font-weight: bold;
 }
 
 .results {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
 }
 
 .user-card, .post-card, .photo-card {
-    background: white;
+    background: #f7fafc;
     padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s;
-}
-
-.user-card:hover, .post-card:hover, .photo-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
-}
-
-.card-header {
-    border-bottom: 2px solid #e2e8f0;
-    padding-bottom: 10px;
     margin-bottom: 15px;
+    border-radius: 8px;
+    border-left: 4px solid #667eea;
 }
 
-.card-title {
-    font-size: 18px;
-    font-weight: bold;
+.user-card h3, .post-card h3, .photo-card h3 {
     color: #2d3748;
-    margin-bottom: 5px;
-}
-
-.card-subtitle {
-    font-size: 14px;
-    color: #718096;
-}
-
-.card-body {
-    color: #4a5568;
-    line-height: 1.6;
-}
-
-.card-body p {
     margin-bottom: 10px;
-}
-
-.card-body strong {
-    color: #2d3748;
 }
 
 .photo-card img {
-    width: 100%;
+    width: 150px;
     border-radius: 8px;
     margin-bottom: 10px;
-}
-
-.badge {
-    display: inline-block;
-    padding: 5px 10px;
-    border-radius: 15px;
-    font-size: 12px;
-    font-weight: bold;
-    background: #bee3f8;
-    color: #2c5282;
-}
-
-@media (max-width: 768px) {
-    .tabs, .action-bar, .search-bar {
-        flex-direction: column;
-    }
-    
-    .tab-btn, .btn {
-        width: 100%;
-    }
-    
-    .results {
-        grid-template-columns: 1fr;
-    }
 }
 ```
 
@@ -1181,358 +919,244 @@ input[type="number"] {
 
 #### `app.js`
 ```javascript
-// URL de base de l'API
-const API_BASE_URL = 'https://jsonplaceholder.typicode.com';
+// URL de l'API
+const API_URL = 'https://jsonplaceholder.typicode.com';
 
-// Sélection des éléments DOM
+// Récupérer les éléments HTML
 const resultsDiv = document.getElementById('results');
 const loadingDiv = document.getElementById('loading');
 const errorDiv = document.getElementById('error');
-const statsDiv = document.getElementById('stats');
-const responseTimeSpan = document.getElementById('responseTime');
-const itemsCountSpan = document.getElementById('itemsCount');
-const httpStatusSpan = document.getElementById('httpStatus');
 
-// Gestion des onglets
-const tabButtons = document.querySelectorAll('.tab-btn');
-const tabContents = document.querySelectorAll('.tab-content');
-
-tabButtons.forEach(button => {
-    button.addEventListener('click', () => {
-        const tabName = button.dataset.tab;
-        
-        // Désactiver tous les onglets
-        tabButtons.forEach(btn => btn.classList.remove('active'));
-        tabContents.forEach(content => content.classList.remove('active'));
-        
-        // Activer l'onglet sélectionné
-        button.classList.add('active');
-        document.getElementById(`${tabName}-tab`).classList.add('active');
-        
-        // Effacer les résultats
-        clearResults();
-    });
-});
-
-// Fonctions utilitaires
-function showLoading() {
+// ============================================
+// FONCTION POUR CHARGER LES UTILISATEURS
+// ============================================
+function loadUsers() {
+    // Afficher le chargement
     loadingDiv.classList.remove('hidden');
     resultsDiv.innerHTML = '';
-    errorDiv.classList.add('hidden');
-    statsDiv.classList.add('hidden');
+    
+    // Appeler l'API
+    fetch(API_URL + '/users')
+        .then(response => response.json())
+        .then(users => {
+            // Cacher le chargement
+            loadingDiv.classList.add('hidden');
+            
+            // Créer le HTML pour chaque utilisateur
+            let html = '<h2>👥 Utilisateurs (' + users.length + ')</h2>';
+            
+            users.forEach(user => {
+                html += `
+                    <div class="user-card">
+                        <h3>${user.name}</h3>
+                        <p>📧 ${user.email}</p>
+                        <p>📱 ${user.phone}</p>
+                        <p>🏢 ${user.company.name}</p>
+                        <p>🌍 ${user.address.city}</p>
+                    </div>
+                `;
+            });
+            
+            resultsDiv.innerHTML = html;
+        })
+        .catch(error => {
+            loadingDiv.classList.add('hidden');
+            errorDiv.innerHTML = '❌ Erreur : ' + error.message;
+            errorDiv.classList.remove('hidden');
+        });
 }
 
-function hideLoading() {
-    loadingDiv.classList.add('hidden');
-}
-
-function showError(message) {
-    errorDiv.innerHTML = `<strong>❌ Erreur :</strong> ${message}`;
-    errorDiv.classList.remove('hidden');
-}
-
-function showStats(responseTime, itemsCount, httpStatus) {
-    responseTimeSpan.textContent = `${responseTime} ms`;
-    itemsCountSpan.textContent = itemsCount;
-    httpStatusSpan.textContent = httpStatus;
-    statsDiv.classList.remove('hidden');
-}
-
-function clearResults() {
+// ============================================
+// FONCTION POUR CHARGER LES POSTS
+// ============================================
+function loadPosts() {
+    // Afficher le chargement
+    loadingDiv.classList.remove('hidden');
     resultsDiv.innerHTML = '';
-    errorDiv.classList.add('hidden');
-    statsDiv.classList.add('hidden');
-}
-
-// Fonction générique pour faire des requêtes API
-async function fetchAPI(endpoint) {
-    const startTime = performance.now();
     
-    try {
-        const response = await fetch(`${API_BASE_URL}${endpoint}`);
-        const endTime = performance.now();
-        const responseTime = Math.round(endTime - startTime);
-        
-        if (!response.ok) {
-            throw new Error(`Erreur HTTP: ${response.status} ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        
-        return {
-            data,
-            responseTime,
-            status: response.status
-        };
-        
-    } catch (error) {
-        throw new Error(`Impossible de récupérer les données: ${error.message}`);
-    }
+    // Appeler l'API (limité à 10 posts)
+    fetch(API_URL + '/posts?_limit=10')
+        .then(response => response.json())
+        .then(posts => {
+            // Cacher le chargement
+            loadingDiv.classList.add('hidden');
+            
+            // Créer le HTML pour chaque post
+            let html = '<h2>📝 Posts (' + posts.length + ')</h2>';
+            
+            posts.forEach(post => {
+                html += `
+                    <div class="post-card">
+                        <h3>${post.title}</h3>
+                        <p>${post.body}</p>
+                        <small>Par utilisateur #${post.userId}</small>
+                    </div>
+                `;
+            });
+            
+            resultsDiv.innerHTML = html;
+        })
+        .catch(error => {
+            loadingDiv.classList.add('hidden');
+            errorDiv.innerHTML = '❌ Erreur : ' + error.message;
+            errorDiv.classList.remove('hidden');
+        });
 }
 
 // ============================================
-// ONGLET UTILISATEURS
+// FONCTION POUR CHARGER LES PHOTOS
 // ============================================
-
-document.getElementById('loadAllUsers').addEventListener('click', loadAllUsers);
-document.getElementById('loadRandomUser').addEventListener('click', loadRandomUser);
-
-async function loadAllUsers() {
-    showLoading();
+function loadPhotos() {
+    // Afficher le chargement
+    loadingDiv.classList.remove('hidden');
+    resultsDiv.innerHTML = '';
     
-    try {
-        const result = await fetchAPI('/users');
-        displayUsers(result.data);
-        showStats(result.responseTime, result.data.length, result.status);
-    } catch (error) {
-        showError(error.message);
-    } finally {
-        hideLoading();
-    }
-}
-
-async function loadRandomUser() {
-    showLoading();
-    
-    try {
-        const randomId = Math.floor(Math.random() * 10) + 1;
-        const result = await fetchAPI(`/users/${randomId}`);
-        displayUsers([result.data]);
-        showStats(result.responseTime, 1, result.status);
-    } catch (error) {
-        showError(error.message);
-    } finally {
-        hideLoading();
-    }
-}
-
-function displayUsers(users) {
-    resultsDiv.innerHTML = users.map(user => `
-        <div class="user-card">
-            <div class="card-header">
-                <div class="card-title">👤 ${user.name}</div>
-                <div class="card-subtitle">@${user.username}</div>
-            </div>
-            <div class="card-body">
-                <p><strong>📧 Email:</strong> ${user.email}</p>
-                <p><strong>📱 Téléphone:</strong> ${user.phone}</p>
-                <p><strong>🌐 Site web:</strong> ${user.website}</p>
-                <p><strong>🏢 Entreprise:</strong> ${user.company.name}</p>
-                <p><strong>📍 Ville:</strong> ${user.address.city}</p>
-                <p><span class="badge">ID: ${user.id}</span></p>
-            </div>
-        </div>
-    `).join('');
+    // Appeler l'API (limité à 6 photos)
+    fetch(API_URL + '/photos?_limit=6')
+        .then(response => response.json())
+        .then(photos => {
+            // Cacher le chargement
+            loadingDiv.classList.add('hidden');
+            
+            // Créer le HTML pour chaque photo
+            let html = '<h2>📸 Photos (' + photos.length + ')</h2>';
+            
+            photos.forEach(photo => {
+                html += `
+                    <div class="photo-card">
+                        <img src="${photo.thumbnailUrl}" alt="${photo.title}">
+                        <h3>${photo.title}</h3>
+                    </div>
+                `;
+            });
+            
+            resultsDiv.innerHTML = html;
+        })
+        .catch(error => {
+            loadingDiv.classList.add('hidden');
+            errorDiv.innerHTML = '❌ Erreur : ' + error.message;
+            errorDiv.classList.remove('hidden');
+        });
 }
 
 // ============================================
-// ONGLET POSTS
+// FONCTION POUR RECHERCHER
 // ============================================
-
-document.getElementById('loadAllPosts').addEventListener('click', loadAllPosts);
-document.getElementById('loadUserPosts').addEventListener('click', loadUserPosts);
-
-async function loadAllPosts() {
-    showLoading();
+function searchPosts() {
+    const searchInput = document.getElementById('searchInput');
+    const searchTerm = searchInput.value;
     
-    try {
-        const result = await fetchAPI('/posts?_limit=12');
-        displayPosts(result.data);
-        showStats(result.responseTime, result.data.length, result.status);
-    } catch (error) {
-        showError(error.message);
-    } finally {
-        hideLoading();
-    }
-}
-
-async function loadUserPosts() {
-    const userId = document.getElementById('userIdInput').value;
-    
-    if (!userId || userId < 1 || userId > 10) {
-        showError('Veuillez entrer un ID utilisateur valide (1-10)');
+    if (searchTerm === '') {
+        alert('Veuillez entrer un terme de recherche');
         return;
     }
     
-    showLoading();
+    // Afficher le chargement
+    loadingDiv.classList.remove('hidden');
+    resultsDiv.innerHTML = '';
     
-    try {
-        const result = await fetchAPI(`/posts?userId=${userId}`);
-        
-        if (result.data.length === 0) {
-            showError('Aucun post trouvé pour cet utilisateur');
-            return;
-        }
-        
-        displayPosts(result.data);
-        showStats(result.responseTime, result.data.length, result.status);
-    } catch (error) {
-        showError(error.message);
-    } finally {
-        hideLoading();
-    }
-}
-
-function displayPosts(posts) {
-    resultsDiv.innerHTML = posts.map(post => `
-        <div class="post-card">
-            <div class="card-header">
-                <div class="card-title">📝 ${post.title}</div>
-                <div class="card-subtitle">Par utilisateur #${post.userId}</div>
-            </div>
-            <div class="card-body">
-                <p>${post.body}</p>
-                <p><span class="badge">Post ID: ${post.id}</span></p>
-            </div>
-        </div>
-    `).join('');
-}
-
-// ============================================
-// ONGLET PHOTOS
-// ============================================
-
-document.getElementById('loadPhotos').addEventListener('click', loadPhotos);
-
-async function loadPhotos() {
-    const limit = document.getElementById('photoLimit').value || 6;
-    
-    if (limit < 1 || limit > 20) {
-        showError('Veuillez entrer un nombre entre 1 et 20');
-        return;
-    }
-    
-    showLoading();
-    
-    try {
-        const result = await fetchAPI(`/photos?_limit=${limit}`);
-        displayPhotos(result.data);
-        showStats(result.responseTime, result.data.length, result.status);
-    } catch (error) {
-        showError(error.message);
-    } finally {
-        hideLoading();
-    }
-}
-
-function displayPhotos(photos) {
-    resultsDiv.innerHTML = photos.map(photo => `
-        <div class="photo-card">
-            <img src="${photo.thumbnailUrl}" alt="${photo.title}">
-            <div class="card-header">
-                <div class="card-title">${photo.title}</div>
-            </div>
-            <div class="card-body">
-                <p><span class="badge">Album: ${photo.albumId}</span></p>
-                <p><span class="badge">Photo ID: ${photo.id}</span></p>
-            </div>
-        </div>
-    `).join('');
+    // Appeler l'API pour tous les posts
+    fetch(API_URL + '/posts')
+        .then(response => response.json())
+        .then(posts => {
+            // Filtrer les posts qui contiennent le terme recherché
+            const filteredPosts = posts.filter(post => 
+                post.title.includes(searchTerm) || 
+                post.body.includes(searchTerm)
+            );
+            
+            // Cacher le chargement
+            loadingDiv.classList.add('hidden');
+            
+            if (filteredPosts.length === 0) {
+                resultsDiv.innerHTML = '<p>Aucun résultat trouvé</p>';
+                return;
+            }
+            
+            // Créer le HTML
+            let html = '<h2>🔍 Résultats (' + filteredPosts.length + ')</h2>';
+            
+            filteredPosts.forEach(post => {
+                html += `
+                    <div class="post-card">
+                        <h3>${post.title}</h3>
+                        <p>${post.body}</p>
+                    </div>
+                `;
+            });
+            
+            resultsDiv.innerHTML = html;
+        })
+        .catch(error => {
+            loadingDiv.classList.add('hidden');
+            errorDiv.innerHTML = '❌ Erreur : ' + error.message;
+            errorDiv.classList.remove('hidden');
+        });
 }
 
 // ============================================
-// ONGLET RECHERCHE
+// CONNECTER LES BOUTONS
 // ============================================
-
-document.getElementById('searchBtn').addEventListener('click', searchPosts);
-document.getElementById('searchInput').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') searchPosts();
-});
-
-async function searchPosts() {
-    const searchTerm = document.getElementById('searchInput').value.trim();
-    
-    if (!searchTerm) {
-        showError('Veuillez entrer un terme de recherche');
-        return;
-    }
-    
-    showLoading();
-    
-    try {
-        // Charger tous les posts
-        const result = await fetchAPI('/posts');
-        
-        // Filtrer les posts qui contiennent le terme de recherche
-        const filteredPosts = result.data.filter(post => 
-            post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            post.body.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-        
-        if (filteredPosts.length === 0) {
-            showError(`Aucun résultat trouvé pour "${searchTerm}"`);
-            hideLoading();
-            return;
-        }
-        
-        displayPosts(filteredPosts);
-        showStats(result.responseTime, filteredPosts.length, result.status);
-    } catch (error) {
-        showError(error.message);
-    } finally {
-        hideLoading();
-    }
-}
-
-// Message de bienvenue initial
-resultsDiv.innerHTML = `
-    <div style="grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: white;">
-        <h2 style="font-size: 32px; margin-bottom: 20px;">🚀 Prêt à explorer les API REST ?</h2>
-        <p style="font-size: 18px; margin-bottom: 15px;">
-            Sélectionnez un onglet ci-dessus et cliquez sur un bouton pour charger les données
-        </p>
-        <p style="font-size: 14px; opacity: 0.8;">
-            Les données proviennent de l'API publique JSONPlaceholder
-        </p>
-    </div>
-`;
+document.getElementById('loadUsers').onclick = loadUsers;
+document.getElementById('loadPosts').onclick = loadPosts;
+document.getElementById('loadPhotos').onclick = loadPhotos;
+document.getElementById('searchBtn').onclick = searchPosts;
 ```
 
 ### 📝 Explications détaillées du code
 
-#### 1. **Structure de l'API**
+#### 1. **Structure de base**
 ```javascript
-const API_BASE_URL = 'https://jsonplaceholder.typicode.com';
+const API_URL = 'https://jsonplaceholder.typicode.com';
 ```
-- URL de base de l'API
-- Tous les endpoints sont relatifs à cette URL
+- On définit l'adresse de l'API
 
-#### 2. **Fonction générique fetchAPI**
+#### 2. **Appeler l'API avec fetch()**
 ```javascript
-async function fetchAPI(endpoint) {
-    const startTime = performance.now();
-    const response = await fetch(`${API_BASE_URL}${endpoint}`);
-    const endTime = performance.now();
-    // ...
-}
+fetch(API_URL + '/users')
 ```
-- Réutilisable pour tous les appels API
-- Mesure le temps de réponse
-- Gère les erreurs de manière centralisée
+- `fetch()` = demande des données à l'API
+- On donne l'URL complète
 
-#### 3. **Paramètres d'URL (Query Parameters)**
+#### 3. **Convertir en JSON**
 ```javascript
-'/posts?userId=1'           // Filtrer par userId
-'/posts?_limit=12'          // Limiter à 12 résultats
-'/photos?_limit=6'          // Limiter à 6 photos
+.then(response => response.json())
 ```
+- `.then()` = "quand les données arrivent..."
+- `response.json()` = transforme en objet JavaScript
 
-#### 4. **Gestion des onglets**
-- Interface multi-onglets pour différentes fonctionnalités
-- Chaque onglet a ses propres contrôles
+#### 4. **Utiliser les données**
+```javascript
+.then(users => {
+    // Ici on a les utilisateurs !
+})
+```
+- On reçoit les données et on peut les afficher
 
-#### 5. **Statistiques de performance**
-- Temps de réponse API
-- Nombre d'éléments chargés
-- Code de statut HTTP
+#### 5. **Boucle pour afficher**
+```javascript
+users.forEach(user => {
+    html += '<div>' + user.name + '</div>';
+});
+```
+- `forEach()` = pour chaque élément du tableau
+- On crée du HTML pour chaque utilisateur
+
+#### 6. **Gérer les erreurs**
+```javascript
+.catch(error => {
+    // Si ça ne marche pas
+})
+```
+- `.catch()` = attrape les erreurs
 
 ### 🎯 Points d'apprentissage clés
 
-1. **Requêtes HTTP réelles** : Contrairement à l'exercice 1, les données viennent d'Internet
-2. **Paramètres d'URL** : Filtrage et limitation des résultats
-3. **Gestion d'état** : Affichage de loading, erreurs, succès
-4. **Performance** : Mesure du temps de réponse
-5. **Interface riche** : Onglets, recherche, filtres
+1. **Fetch API** : Fonction simple pour appeler une API
+2. **Promises** : `.then()` pour gérer les réponses
+3. **JSON** : Format d'échange de données
+4. **forEach** : Boucle pour parcourir les données
+5. **Gestion d'erreurs** : `.catch()` pour attraper les problèmes
 
 ### 🚀 Pour tester l'application
 

@@ -129,6 +129,10 @@ Quelqu'un modifie le userId dans le token
 
 ## 3. Qu'est-ce que bcrypt ?
 
+**Hash :** Fonction cryptographique à sens unique qui transforme une donnée en une empreinte numérique fixe, non réversible, utilisée pour vérifier l’intégrité ou sécuriser des mots de passe.
+
+**Cryptage (Chiffrement) :** Procédé réversible qui transforme une donnée lisible en donnée illisible à l’aide d’une clé afin de protéger sa confidentialité.
+
 ### 📖 Définition
 **bcrypt** = Une fonction qui transforme un mot de passe en une chaîne illisible (hash) pour le sécuriser.
 

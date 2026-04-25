@@ -1,1264 +1,1618 @@
-# TD - Comprendre les API REST et les Microservices
-
-## 📚 Table des matières
-1. [Introduction aux API REST](#introduction)
-2. [Architecture Microservices](#architecture)
-3. [Concepts clés](#concepts)
-4. [Exercice 1 : Consommer des données depuis un fichier JSON](#exercice-1)
-5. [Exercice 2 : Consommer une API publique](#exercice-2)
+# DOCUMENTATION COMPLETE
+# API REST avec Architecture Microservices et JWT
+# Reference pour stagiaire 206
 
 ---
 
-## 🎯 Introduction aux API REST {#introduction}
+## TABLE DES MATIERES
 
-### Qu'est-ce qu'une API REST ?
-
-**REST** (Representational State Transfer) est un style d'architecture pour les services web qui utilise le protocole HTTP.
-
-**Principes de base :**
-- **Client-Serveur** : Séparation des responsabilités
-- **Sans état (Stateless)** : Chaque requête est indépendante
-- **Cacheable** : Les réponses peuvent être mises en cache
-- **Interface uniforme** : Utilisation des méthodes HTTP standard
-
-### Les méthodes HTTP
-
-| Méthode | Action | Exemple |
-|---------|--------|---------|
-| **GET** | Récupérer des données | `GET /api/users` |
-| **POST** | Créer une ressource | `POST /api/users` |
-| **PUT** | Modifier une ressource complète | `PUT /api/users/1` |
-| **PATCH** | Modifier partiellement | `PATCH /api/users/1` |
-| **DELETE** | Supprimer une ressource | `DELETE /api/users/1` |
-
-### Les codes de statut HTTP
-
-| Code | Signification | Exemple |
-|------|---------------|---------|
-| **200** | OK - Succès | Données récupérées avec succès |
-| **201** | Created - Créé | Nouvelle ressource créée |
-| **400** | Bad Request - Mauvaise requête | Données invalides |
-| **404** | Not Found - Non trouvé | Ressource inexistante |
-| **500** | Internal Server Error | Erreur serveur |
+1.  [Vue d ensemble du projet](#1-vue-densemble-du-projet)
+2.  [Structure des fichiers](#2-structure-des-fichiers)
+3.  [Installation pas a pas](#3-installation-pas-a-pas)
+4.  [Fichier .env](#4-fichier-env)
+5.  [Fichier package.json](#5-fichier-packagejson)
+6.  [Base de donnees JSON](#6-base-de-donnees-json)
+7.  [Fichier api.js — Serveur principal](#7-fichier-apijs--serveur-principal)
+8.  [Auth Service — services/auth-service/server.js](#8-auth-service--servicesauth-serviceserverjs)
+9.  [Tasks Service — services/tasks-service/server.js](#9-tasks-service--servicestasks-serviceserverjs)
+10. [Interface web — public/index.html](#10-interface-web--publicindexhtml)
+11. [Architecture Microservices expliquee](#11-architecture-microservices-expliquee)
+12. [JWT explique de A a Z](#12-jwt-explique-de-a-a-z)
+13. [bcrypt explique de A a Z](#13-bcrypt-explique-de-a-a-z)
+14. [Les Middlewares expliques](#14-les-middlewares-expliques)
+15. [CORS explique](#15-cors-explique)
+16. [Tester l application](#16-tester-lapplication)
+17. [Glossaire complet](#17-glossaire-complet)
+18. [Questions de validation](#18-questions-de-validation)
 
 ---
 
-## 🏗️ Architecture Microservices {#architecture}
+## 1. VUE D ENSEMBLE DU PROJET
 
-### Schéma d'une Application Microservices
+### Ce que fait cette application
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         CLIENT (Navigateur)                      │
-│                    Interface Utilisateur (UI)                    │
-└───────────────────────────────┬─────────────────────────────────┘
-                                │
-                                │ HTTP/HTTPS
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                          API GATEWAY                             │
-│         (Point d'entrée unique - Routage des requêtes)          │
-└────────┬──────────────┬──────────────┬──────────────┬───────────┘
-         │              │              │              │
-         ▼              ▼              ▼              ▼
-    ┌────────┐    ┌────────┐    ┌────────┐    ┌────────┐
-    │Service │    │Service │    │Service │    │Service │
-    │Utilisat│    │ Produit│    │Commande│    │Paiement│
-    │  eurs  │    │   s    │    │   s    │    │        │
-    └────┬───┘    └────┬───┘    └────┬───┘    └────┬───┘
-         │             │             │             │
-         ▼             ▼             ▼             ▼
-    ┌────────┐    ┌────────┐    ┌────────┐    ┌────────┐
-    │   BD   │    │   BD   │    │   BD   │    │   BD   │
-    │Utilisat│    │Produits│    │Commande│    │Paiement│
-    └────────┘    └────────┘    └────────┘    └────────┘
-```
+Cette application est un gestionnaire de taches (To-Do List) avec :
+- Inscription et connexion des utilisateurs
+- Chaque utilisateur voit UNIQUEMENT ses propres taches
+- Securite par token JWT
+- Mots de passe proteges par bcrypt
 
-### Explication détaillée de l'architecture
-
-#### 1. **Client (Interface Utilisateur)**
-- Application web, mobile ou desktop
-- Envoie des requêtes HTTP vers l'API Gateway
-- Affiche les données reçues à l'utilisateur
-
-#### 2. **API Gateway** 
-- **Rôle** : Point d'entrée unique pour toutes les requêtes
-- **Fonctions** :
-  - Routage des requêtes vers le bon microservice
-  - Authentification et autorisation
-  - Limitation du taux de requêtes (rate limiting)
-  - Transformation des requêtes/réponses
-
-#### 3. **Microservices**
-Chaque service est **indépendant** et gère une fonctionnalité spécifique :
-
-- **Service Utilisateurs** : Gestion des comptes, authentification
-- **Service Produits** : Catalogue, stock, recherche
-- **Service Commandes** : Création et suivi des commandes
-- **Service Paiement** : Traitement des paiements
-
-**Avantages** :
-- ✅ Scalabilité indépendante
-- ✅ Déploiement indépendant
-- ✅ Technologies différentes possibles
-- ✅ Équipes autonomes
-
-#### 4. **Bases de données**
-- Chaque microservice a sa propre base de données
-- Isolation des données
-- Pas de dépendances directes entre services
-
-### Flux de communication - Exemple concret
-
-**Scénario** : Un utilisateur achète un produit
+### Architecture : 3 serveurs qui travaillent ensemble
 
 ```
-1. CLIENT → API Gateway
-   GET /api/products/123
-   "Je veux voir le produit 123"
+┌─────────────────────────────────────────────────────────────┐
+│                    NAVIGATEUR (Eleve)                       │
+│                  http://localhost:3000                       │
+└──────────────┬──────────────────┬───────────────────────────┘
+               │                  │
+               │ Login/Register   │ Gestion des taches
+               ▼                  ▼
+┌──────────────────────┐  ┌──────────────────────────────────┐
+│    AUTH SERVICE      │  │         TASKS SERVICE            │
+│    Port : 3001       │  │         Port : 3002              │
+│                      │  │                                  │
+│  POST /auth/register │  │  GET    /tasks                   │
+│  POST /auth/login    │  │  POST   /tasks                   │
+│                      │  │  PATCH  /tasks/:id               │
+│  Repond avec         │  │  DELETE /tasks/:id               │
+│  un TOKEN JWT        │  │                                  │
+└──────────┬───────────┘  └──────────────┬───────────────────┘
+           │                             │
+           │        ┌────────────────────┘
+           ▼        ▼
+┌──────────────────────────────────────┐
+│         BASE DE DONNEES JSON         │
+│         dossier data/                │
+│                                      │
+│  users.json  → Liste des utilisateurs│
+│  tasks.json  → Liste des taches      │
+└──────────────────────────────────────┘
+```
 
-2. API Gateway → Service Produits
-   Routage de la requête
-   
-3. Service Produits → BD Produits
-   SELECT * FROM products WHERE id=123
-   
-4. Service Produits → API Gateway → CLIENT
-   Response: { "id": 123, "name": "Laptop", "price": 999 }
+### Difference entre Monolithique et Microservices
 
-5. CLIENT → API Gateway
-   POST /api/orders
-   Body: { "productId": 123, "quantity": 1 }
-   
-6. API Gateway → Service Commandes
-   Création de la commande
-   
-7. Service Commandes → Service Produits
-   Vérification du stock (appel REST interne)
-   
-8. Service Commandes → Service Paiement
-   Traitement du paiement (appel REST interne)
-   
-9. Retour de la confirmation au CLIENT
+```
+APPLICATION MONOLITHIQUE          APPLICATION MICROSERVICES
+─────────────────────────         ──────────────────────────
+Un seul fichier : api.js          3 serveurs independants
+Un seul port : 3000               Ports : 3000, 3001, 3002
+Si une partie plante :            Si Auth plante :
+  → Tout s arrete                   → Tasks continue
+Difficile a scaler                Chaque service scalable
 ```
 
 ---
 
-## 📖 Concepts clés {#concepts}
+## 2. STRUCTURE DES FICHIERS
 
-### JSON (JavaScript Object Notation)
+```
+apirestexercice/
+│
+├── api.js                          ← Serveur web (port 3000) : sert l IHM
+│
+├── services/                       ← Dossier des microservices
+│   ├── auth-service/
+│   │   └── server.js               ← Auth Service (port 3001)
+│   └── tasks-service/
+│       └── server.js               ← Tasks Service (port 3002)
+│
+├── data/                           ← Base de donnees JSON partagee
+│   ├── users.json                  ← Stocke les utilisateurs
+│   └── tasks.json                  ← Stocke les taches
+│
+├── public/                         ← Fichiers envoyes au navigateur
+│   └── index.html                  ← Interface web (IHM)
+│
+├── .env                            ← Variables secretes (cle JWT, port)
+├── .gitignore                      ← Fichiers exclus de Git
+├── package.json                    ← Configuration npm et dependances
+├── README.md                       ← Guide de demarrage rapide
+├── COURS.md                        ← Cours complet Node.js / Express / JWT
+└── DOCUMENTATION.md                ← Ce fichier
+```
 
-Format d'échange de données léger et lisible :
+### Role de chaque fichier
+
+| Fichier | Port | Responsabilite |
+|---------|------|---------------|
+| `api.js` | 3000 | Sert uniquement l interface web HTML |
+| `auth-service/server.js` | 3001 | Inscription + Connexion + Creation JWT |
+| `tasks-service/server.js` | 3002 | CRUD des taches + Verification JWT |
+| `data/users.json` | — | Base de donnees des utilisateurs |
+| `data/tasks.json` | — | Base de donnees des taches |
+| `.env` | — | Cle secrete JWT et configuration |
+
+---
+
+## 3. INSTALLATION PAS A PAS
+
+### Etape 1 : Verifier Node.js
+
+```powershell
+# Verifier que Node.js est installe
+node --version
+# Resultat attendu : v18.x.x ou superieur
+
+# Verifier que npm est installe
+npm --version
+# Resultat attendu : 9.x.x ou superieur
+```
+
+### Etape 2 : Ouvrir le projet
+
+```powershell
+# Aller dans le dossier du projet
+cd C:\chemin\vers\apirestexercice
+```
+
+### Etape 3 : Installer les dependances
+
+```powershell
+# Installer tous les packages listes dans package.json
+npm install
+```
+
+Cette commande telecharge et installe :
+- `express` : framework web
+- `jsonwebtoken` : gestion des tokens JWT
+- `bcryptjs` : hachage des mots de passe
+- `dotenv` : lecture du fichier .env
+- `concurrently` : lancer plusieurs serveurs en meme temps
+- `nodemon` : redemarrage automatique en developpement
+
+### Etape 4 : Verifier le fichier .env
+
+Verifier que le fichier `.env` existe a la racine du projet avec ce contenu :
+
+```
+SECRET_KEY=ceci_est_ma_cle_secrete_tres_longue
+PORT=3000
+```
+
+### Etape 5 : Demarrer l application
+
+```powershell
+# Lancer les 3 serveurs en meme temps (RECOMMANDE)
+npm run start:all
+```
+
+Resultat dans le terminal :
+
+```
+ Serveur web     → http://localhost:3000  (interface web)
+
+ Auth Service    → http://localhost:3001
+   POST /auth/register  (inscription)
+   POST /auth/login     (connexion)
+
+ Tasks Service   → http://localhost:3002
+   GET    /tasks         (lire les taches)
+   POST   /tasks         (creer une tache)
+   PATCH  /tasks/:id     (modifier une tache)
+   DELETE /tasks/:id     (supprimer une tache)
+```
+
+### Etape 6 : Ouvrir l interface web
+
+Ouvrir le navigateur et aller sur : **http://localhost:3000**
+
+---
+
+## 4. FICHIER .env
+
+### A quoi ca sert ?
+
+Le fichier `.env` contient des informations **secretes** qui ne doivent JAMAIS etre mises dans le code source ni envoyees sur Git.
+
+### Contenu du fichier
+
+```
+# Cle secrete pour signer et verifier les tokens JWT
+# IMPORTANT : cette cle doit etre longue et complexe en production
+SECRET_KEY=ceci_est_ma_cle_secrete_tres_longue_12345
+
+# Port du serveur web principal
+PORT=3000
+```
+
+### Comment l utiliser dans le code
+
+```javascript
+// Charger le fichier .env (toujours en premiere ligne du fichier)
+require('dotenv').config();
+
+// Lire une variable
+const cle = process.env.SECRET_KEY;  // "ceci_est_ma_cle_secrete..."
+const port = process.env.PORT;       // "3000"
+```
+
+### Pourquoi ne pas ecrire la cle directement dans le code ?
+
+```javascript
+// MAUVAIS : la cle est visible dans le code source
+const token = jwt.sign({ userId: 1 }, "maclesecrete");
+
+// BON : la cle est cachee dans .env
+const token = jwt.sign({ userId: 1 }, process.env.SECRET_KEY);
+```
+
+### Le fichier .gitignore
+
+Le fichier `.gitignore` empeche d envoyer les fichiers sensibles sur Git :
+
+```
+node_modules/    ← Trop volumineux (telecharge avec npm install)
+.env             ← Contient des secrets
+```
+
+---
+
+## 5. FICHIER package.json
 
 ```json
 {
-  "id": 1,
-  "nom": "Jean Dupont",
-  "email": "jean@example.com",
-  "actif": true,
-  "roles": ["admin", "user"],
-  "adresse": {
-    "rue": "123 Rue de la Paix",
-    "ville": "Paris"
+  "name": "api-jwt-simple",
+  "version": "1.0.0",
+  "description": "API REST avec Microservices et JWT",
+  "main": "api.js",
+  "scripts": {
+    "start":       "node api.js",
+    "dev":         "nodemon api.js",
+    "start:auth":  "node services/auth-service/server.js",
+    "start:tasks": "node services/tasks-service/server.js",
+    "start:all":   "concurrently \"npm run start\" \"npm run start:auth\" \"npm run start:tasks\"",
+    "dev:auth":    "nodemon services/auth-service/server.js",
+    "dev:tasks":   "nodemon services/tasks-service/server.js",
+    "dev:all":     "concurrently \"npm run dev\" \"npm run dev:auth\" \"npm run dev:tasks\""
+  },
+  "dependencies": {
+    "express":       "^4.18.2",
+    "jsonwebtoken":  "^9.0.2",
+    "bcryptjs":      "^2.4.3",
+    "dotenv":        "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon":       "^3.0.1",
+    "concurrently":  "^8.2.2"
   }
 }
 ```
 
-### Endpoint (Point de terminaison)
+### Explication des scripts
 
-Une URL qui représente une ressource :
-- `https://api.example.com/users` - Collection d'utilisateurs
-- `https://api.example.com/users/1` - Utilisateur spécifique
-- `https://api.example.com/users/1/orders` - Commandes d'un utilisateur
+| Commande | Ce qu elle fait |
+|----------|----------------|
+| `npm start` | Lance `api.js` sur le port 3000 |
+| `npm run dev` | Lance `api.js` avec nodemon (redemarrage auto) |
+| `npm run start:auth` | Lance Auth Service sur le port 3001 |
+| `npm run start:tasks` | Lance Tasks Service sur le port 3002 |
+| `npm run start:all` | Lance les 3 serveurs en meme temps |
+| `npm run dev:all` | Lance les 3 serveurs avec nodemon |
 
-### Headers HTTP
-
-Métadonnées envoyées avec la requête/réponse :
+### Difference dependencies / devDependencies
 
 ```
-Content-Type: application/json
-Authorization: Bearer token123
-Accept: application/json
+dependencies    → Necessaires pour faire tourner l app en production
+                  (express, jwt, bcrypt, dotenv)
+
+devDependencies → Utiles seulement pendant le developpement
+                  (nodemon, concurrently)
 ```
 
 ---
 
-## 🎓 Exercice 1 : Consommer des données depuis un fichier JSON {#exercice-1}
+## 6. BASE DE DONNEES JSON
 
-### Objectif
-Créer une application web qui lit des données depuis des fichiers JSON locaux et les affiche dans une interface.
+### Pourquoi des fichiers JSON ?
 
-### Étape 1 : Préparation de la structure
+Pour ce projet pedagogique, on utilise des fichiers JSON a la place d une vraie
+base de donnees (MySQL, MongoDB...). C est simple a comprendre et a lire.
 
-Créez la structure suivante :
+### data/users.json
 
-```
-projet-api-rest/
-│
-├── index.html
-├── styles.css
-├── app.js
-└── data/
-    ├── users.json
-    └── products.json
-```
+Ce fichier contient la liste de tous les utilisateurs inscrits.
 
-### Étape 2 : Créer les fichiers JSON
-
-#### `data/users.json`
 ```json
-{
-  "users": [
-    {
-      "id": 1,
-      "nom": "Alice Martin",
-      "email": "alice@example.com",
-      "role": "Administrateur",
-      "actif": true
-    },
-    {
-      "id": 2,
-      "nom": "Bob Durand",
-      "email": "bob@example.com",
-      "role": "Utilisateur",
-      "actif": true
-    },
-    {
-      "id": 3,
-      "nom": "Charlie Petit",
-      "email": "charlie@example.com",
-      "role": "Utilisateur",
-      "actif": false
-    }
-  ]
-}
+[
+  {
+    "id": 1,
+    "email": "alice@email.com",
+    "password": "$2a$10$N9qo8uLOickgx2ZMRZoMyeQi8Ke..."
+  },
+  {
+    "id": 2,
+    "email": "bob@email.com",
+    "password": "$2a$10$xyz789abc123..."
+  }
+]
 ```
 
-#### `data/products.json`
+ATTENTION : Le champ `password` contient le HASH bcrypt, jamais le vrai mot de passe.
+
+### data/tasks.json
+
+Ce fichier contient la liste de toutes les taches de tous les utilisateurs.
+
 ```json
-{
-  "products": [
-    {
-      "id": 1,
-      "nom": "Ordinateur Portable",
-      "prix": 999.99,
-      "categorie": "Électronique",
-      "stock": 15,
-      "image": "💻"
-    },
-    {
-      "id": 2,
-      "nom": "Souris Sans Fil",
-      "prix": 29.99,
-      "categorie": "Accessoires",
-      "stock": 50,
-      "image": "🖱️"
-    },
-    {
-      "id": 3,
-      "nom": "Clavier Mécanique",
-      "prix": 149.99,
-      "categorie": "Accessoires",
-      "stock": 8,
-      "image": "⌨️"
-    },
-    {
-      "id": 4,
-      "nom": "Écran 27 pouces",
-      "prix": 399.99,
-      "categorie": "Électronique",
-      "stock": 12,
-      "image": "🖥️"
-    }
-  ]
-}
+[
+  {
+    "id": 1,
+    "userId": 1,
+    "titre": "Apprendre les microservices",
+    "completed": false
+  },
+  {
+    "id": 2,
+    "userId": 1,
+    "titre": "Faire les courses",
+    "completed": true
+  },
+  {
+    "id": 3,
+    "userId": 2,
+    "titre": "Tache de Bob",
+    "completed": false
+  }
+]
 ```
 
-### Étape 3 : Créer l'interface HTML
+Le champ `userId` lie chaque tache a son proprietaire.
+Alice (userId=1) ne voit que les taches 1 et 2.
+Bob (userId=2) ne voit que la tache 3.
 
-#### `index.html`
-```html
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TD API REST - Données Locales</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>🎯 TD API REST - Exercice 1</h1>
-            <p>Consommer des données depuis des fichiers JSON locaux</p>
-        </header>
+---
 
-        <div class="buttons">
-            <button id="loadUsers" class="btn btn-primary">
-                👥 Charger les Utilisateurs
-            </button>
-            <button id="loadProducts" class="btn btn-success">
-                🛍️ Charger les Produits
-            </button>
-            <button id="clearData" class="btn btn-danger">
-                🗑️ Effacer
-            </button>
-        </div>
+## 7. FICHIER api.js — Serveur principal
 
-        <div id="loading" class="loading hidden">
-            <div class="spinner"></div>
-            <p>Chargement des données...</p>
-        </div>
+### Role
 
-        <div id="error" class="error hidden"></div>
+Ce fichier lance un serveur Express sur le port 3000.
+Son unique responsabilite : servir l interface web (le fichier `public/index.html`).
+Il ne gere PAS l authentification ni les taches.
 
-        <div id="results" class="results"></div>
-    </div>
+### Code complet avec explications
 
-    <script src="app.js"></script>
-</body>
-</html>
-```
-
-### Étape 4 : Créer les styles CSS
-
-#### `styles.css`
-```css
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    min-height: 100vh;
-    padding: 20px;
-}
-
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-}
-
-header {
-    background: white;
-    padding: 30px;
-    border-radius: 10px;
-    text-align: center;
-    margin-bottom: 30px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-}
-
-header h1 {
-    color: #667eea;
-    margin-bottom: 10px;
-}
-
-header p {
-    color: #666;
-}
-
-.buttons {
-    display: flex;
-    gap: 15px;
-    justify-content: center;
-    margin-bottom: 30px;
-    flex-wrap: wrap;
-}
-
-.btn {
-    padding: 12px 25px;
-    border: none;
-    border-radius: 5px;
-    font-size: 16px;
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
-    color: white;
-    font-weight: bold;
-}
-
-.btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-}
-
-.btn-primary {
-    background: #667eea;
-}
-
-.btn-success {
-    background: #48bb78;
-}
-
-.btn-danger {
-    background: #f56565;
-}
-
-.loading {
-    background: white;
-    padding: 30px;
-    border-radius: 10px;
-    text-align: center;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-}
-
-.spinner {
-    width: 50px;
-    height: 50px;
-    margin: 0 auto 20px;
-    border: 5px solid #f3f3f3;
-    border-top: 5px solid #667eea;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-.hidden {
-    display: none;
-}
-
-.error {
-    background: #fed7d7;
-    color: #c53030;
-    padding: 20px;
-    border-radius: 10px;
-    margin-bottom: 20px;
-    border-left: 5px solid #f56565;
-}
-
-.results {
-    background: white;
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-}
-
-.results h2 {
-    color: #667eea;
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.results h2::before {
-    content: '📊';
-}
-
-.user-card, .product-card {
-    background: #f7fafc;
-    padding: 20px;
-    margin-bottom: 15px;
-    border-radius: 8px;
-    border-left: 4px solid #667eea;
-    transition: transform 0.2s;
-}
-
-.user-card:hover, .product-card:hover {
-    transform: translateX(5px);
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
-}
-
-.user-header, .product-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-}
-
-.user-name, .product-name {
-    font-size: 20px;
-    font-weight: bold;
-    color: #2d3748;
-}
-
-.badge {
-    padding: 5px 10px;
-    border-radius: 15px;
-    font-size: 12px;
-    font-weight: bold;
-}
-
-.badge-active {
-    background: #c6f6d5;
-    color: #22543d;
-}
-
-.badge-inactive {
-    background: #fed7d7;
-    color: #c53030;
-}
-
-.user-info, .product-info {
-    color: #4a5568;
-    line-height: 1.6;
-}
-
-.price {
-    font-size: 24px;
-    font-weight: bold;
-    color: #48bb78;
-}
-
-.stock {
-    display: inline-block;
-    padding: 5px 10px;
-    background: #bee3f8;
-    color: #2c5282;
-    border-radius: 5px;
-    font-size: 14px;
-}
-
-.product-icon {
-    font-size: 40px;
-    margin-right: 15px;
-}
-
-@media (max-width: 768px) {
-    .buttons {
-        flex-direction: column;
-    }
-    
-    .btn {
-        width: 100%;
-    }
-}
-```
-
-### Étape 5 : Créer le code JavaScript
-
-#### `app.js`
 ```javascript
-// ÉTAPE 1 : Récupérer les éléments HTML
-const resultsDiv = document.getElementById('results');
-const loadingDiv = document.getElementById('loading');
-const errorDiv = document.getElementById('error');
+// ============================================
+// api.js — SERVEUR PRINCIPAL (PORT 3000)
+// Role : servir l interface web au navigateur
+// ============================================
 
-// ÉTAPE 2 : Fonction pour charger les utilisateurs
-function loadUsers() {
-    // Afficher le chargement
-    loadingDiv.classList.remove('hidden');
-    resultsDiv.innerHTML = '';
-    
-    // Appeler l'API pour récupérer les données
-    fetch('data/users.json')
-        .then(response => response.json())  // Convertir en JSON
-        .then(data => {
-            // Cacher le chargement
-            loadingDiv.classList.add('hidden');
-            
-            // Afficher les utilisateurs
-            let html = '<h2>👥 Liste des Utilisateurs</h2>';
-            
-            data.users.forEach(user => {
-                html += `
-                    <div class="user-card">
-                        <h3>${user.nom}</h3>
-                        <p>� ${user.email}</p>
-                        <p>🎭 ${user.role}</p>
-                        <p>Statut: ${user.actif ? '✅ Actif' : '❌ Inactif'}</p>
-                    </div>
-                `;
-            });
-            
-            resultsDiv.innerHTML = html;
-        })
-        .catch(error => {
-            // En cas d'erreur
-            loadingDiv.classList.add('hidden');
-            errorDiv.innerHTML = '❌ Erreur : ' + error.message;
-            errorDiv.classList.remove('hidden');
-        });
-}
+// Charger les variables d environnement depuis .env
+// process.env.PORT sera disponible apres cette ligne
+require('dotenv').config();
 
-// ÉTAPE 3 : Fonction pour charger les produits
-function loadProducts() {
-    // Afficher le chargement
-    loadingDiv.classList.remove('hidden');
-    resultsDiv.innerHTML = '';
-    
-    // Appeler l'API pour récupérer les données
-    fetch('data/products.json')
-        .then(response => response.json())  // Convertir en JSON
-        .then(data => {
-            // Cacher le chargement
-            loadingDiv.classList.add('hidden');
-            
-            // Afficher les produits
-            let html = '<h2>🛍️ Liste des Produits</h2>';
-            
-            data.products.forEach(product => {
-                html += `
-                    <div class="product-card">
-                        <h3>${product.image} ${product.nom}</h3>
-                        <p><strong>Prix:</strong> ${product.prix} €</p>
-                        <p><strong>Catégorie:</strong> ${product.categorie}</p>
-                        <p><strong>Stock:</strong> ${product.stock} unités</p>
-                    </div>
-                `;
-            });
-            
-            resultsDiv.innerHTML = html;
-        })
-        .catch(error => {
-            // En cas d'erreur
-            loadingDiv.classList.add('hidden');
-            errorDiv.innerHTML = '❌ Erreur : ' + error.message;
-            errorDiv.classList.remove('hidden');
-        });
-}
+// Importer Express : framework web pour Node.js
+const express = require('express');
 
-// ÉTAPE 4 : Fonction pour effacer
-function clearData() {
-    resultsDiv.innerHTML = '<p>Cliquez sur un bouton pour charger les données</p>';
-    errorDiv.classList.add('hidden');
-}
+// Importer path : module natif Node.js pour les chemins de fichiers
+// path.join() cree des chemins compatibles Windows et Linux
+const path = require('path');
 
-// ÉTAPE 5 : Connecter les boutons aux fonctions
-document.getElementById('loadUsers').onclick = loadUsers;
-document.getElementById('loadProducts').onclick = loadProducts;
-document.getElementById('clearData').onclick = clearData;
-```
+// Importer les fichiers de routes
+// Ces fichiers definissent les endpoints /auth et /tasks
+const authRoutes  = require('./routes/authRoutes');
+const taskRoutes  = require('./routes/taskRoutes');
 
-### 📝 Explications du code JavaScript (ligne par ligne)
+// Creer l instance Express
+// app est l objet principal sur lequel on branche tout
+const app = express();
 
-#### 1. **Fetch API - Appeler l'API**
-```javascript
-fetch('data/users.json')
-```
-- `fetch()` = fonction pour récupérer des données
-- On lui donne le chemin du fichier JSON
+// ---- MIDDLEWARES ----
 
-#### 2. **Convertir la réponse en JSON**
-```javascript
-.then(response => response.json())
-```
-- `.then()` = "quand la réponse arrive, fais ceci"
-- `response.json()` = transforme la réponse en objet JavaScript
+// Middleware 1 : lire le JSON des requetes POST/PATCH
+// Sans ca, req.body serait undefined
+app.use(express.json());
 
-#### 3. **Utiliser les données**
-```javascript
-.then(data => {
-    // Ici on a nos données !
-    console.log(data);
-})
-```
-- On reçoit les données et on peut les afficher
+// Middleware 2 : servir les fichiers statiques du dossier public/
+// Quand le navigateur demande http://localhost:3000/
+// Express renvoie automatiquement public/index.html
+app.use(express.static(path.join(__dirname, 'public')));
 
-#### 4. **Gérer les erreurs**
-```javascript
-.catch(error => {
-    // Si quelque chose ne marche pas
-    console.log('Erreur:', error);
-})
-```
-- `.catch()` = attrape les erreurs
+// ---- ROUTES ----
+// Ces routes sont gardees pour la compatibilite monolithique
+app.use('/auth',  authRoutes);
+app.use('/tasks', taskRoutes);
 
-#### 5. **Boucle forEach pour afficher**
-```javascript
-data.users.forEach(user => {
-    // Pour chaque utilisateur, on crée du HTML
-    html += '<div>' + user.nom + '</div>';
+// ---- DEMARRER LE SERVEUR ----
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`\n Serveur web → http://localhost:${PORT}`);
+  console.log(`   Ouvrez votre navigateur sur http://localhost:${PORT}\n`);
 });
 ```
-- `forEach()` = parcourt tous les éléments du tableau
-
-### 🚀 Pour tester l'application
-
-**Important** : Les navigateurs modernes bloquent les requêtes `file://` pour des raisons de sécurité.
-
-**Solution** : Utiliser un serveur local
-
-#### Méthode 1 : Avec Python
-```bash
-# Python 3
-python -m http.server 8000
-
-# Puis ouvrir: http://localhost:8000
-```
-
-#### Méthode 2 : Avec Node.js
-```bash
-npx http-server -p 8000
-```
-
-#### Méthode 3 : Avec l'extension VS Code
-- Installer l'extension "Live Server"
-- Clic droit sur `index.html` → "Open with Live Server"
 
 ---
 
-## 🌍 Exercice 2 : Consommer une API publique {#exercice-2}
+## 8. AUTH SERVICE — services/auth-service/server.js
 
-### Objectif
-Créer une application qui consomme des données depuis une API publique gratuite sur Internet.
+### Role
 
-### API utilisée : JSONPlaceholder
-**URL** : `https://jsonplaceholder.typicode.com`
+Ce microservice gere UNIQUEMENT :
+- L inscription (creation d un compte)
+- La connexion (verification des identifiants + creation du JWT)
 
-Cette API gratuite simule une vraie API REST avec :
-- Utilisateurs (`/users`)
-- Posts (`/posts`)
-- Commentaires (`/comments`)
-- Albums (`/albums`)
-- Photos (`/photos`)
+Il ne sait rien des taches. Il ne communique pas avec Tasks Service.
 
-### Étape 1 : Créer la structure
+### Code complet avec explications
 
-```
-projet-api-publique/
-│
-├── index.html
-├── styles.css
-└── app.js
-```
-
-### Étape 2 : Créer l'interface HTML
-
-#### `index.html`
-```html
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TD API REST - API Publique</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>🌍 TD API REST - Exercice 2</h1>
-            <p>Consommer une API publique sur Internet</p>
-        </header>
-
-        <div class="buttons">
-            <button id="loadUsers" class="btn btn-primary">👥 Utilisateurs</button>
-            <button id="loadPosts" class="btn btn-success">📝 Posts</button>
-            <button id="loadPhotos" class="btn btn-info">📸 Photos</button>
-        </div>
-
-        <div class="search-bar">
-            <input type="text" id="searchInput" placeholder="Rechercher un post...">
-            <button id="searchBtn" class="btn btn-primary">🔍 Rechercher</button>
-        </div>
-
-        <div id="loading" class="loading hidden">
-            <div class="spinner"></div>
-            <p>Chargement...</p>
-        </div>
-
-        <div id="error" class="error hidden"></div>
-
-        <div id="results" class="results">
-            <p>Cliquez sur un bouton pour charger les données</p>
-        </div>
-    </div>
-
-    <script src="app.js"></script>
-</body>
-</html>
-```
-
-### Étape 3 : Créer les styles CSS
-
-#### `styles.css`
-```css
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-body {
-    font-family: Arial, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    min-height: 100vh;
-    padding: 20px;
-}
-
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-}
-
-header {
-    background: white;
-    padding: 30px;
-    border-radius: 10px;
-    text-align: center;
-    margin-bottom: 30px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-}
-
-header h1 {
-    color: #667eea;
-    margin-bottom: 10px;
-}
-
-.buttons {
-    display: flex;
-    gap: 15px;
-    justify-content: center;
-    margin-bottom: 20px;
-}
-
-.search-bar {
-    background: white;
-    padding: 20px;
-    border-radius: 10px;
-    margin-bottom: 20px;
-    display: flex;
-    gap: 10px;
-}
-
-.search-bar input {
-    flex: 1;
-    padding: 10px;
-    border: 2px solid #ddd;
-    border-radius: 5px;
-    font-size: 16px;
-}
-
-.btn {
-    padding: 12px 25px;
-    border: none;
-    border-radius: 5px;
-    font-size: 16px;
-    cursor: pointer;
-    color: white;
-    font-weight: bold;
-}
-
-.btn:hover {
-    opacity: 0.9;
-}
-
-.btn-primary {
-    background: #667eea;
-}
-
-.btn-success {
-    background: #48bb78;
-}
-
-.btn-info {
-    background: #0bc5ea;
-}
-
-.loading {
-    background: white;
-    padding: 30px;
-    border-radius: 10px;
-    text-align: center;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-    margin-bottom: 20px;
-}
-
-.spinner {
-    width: 50px;
-    height: 50px;
-    margin: 0 auto 20px;
-    border: 5px solid #f3f3f3;
-    border-top: 5px solid #667eea;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-.hidden {
-    display: none;
-}
-
-.error {
-    background: #fed7d7;
-    color: #c53030;
-    padding: 20px;
-    border-radius: 10px;
-    margin-bottom: 20px;
-}
-
-.results {
-    background: white;
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-}
-
-.user-card, .post-card, .photo-card {
-    background: #f7fafc;
-    padding: 20px;
-    margin-bottom: 15px;
-    border-radius: 8px;
-    border-left: 4px solid #667eea;
-}
-
-.user-card h3, .post-card h3, .photo-card h3 {
-    color: #2d3748;
-    margin-bottom: 10px;
-}
-
-.photo-card img {
-    width: 150px;
-    border-radius: 8px;
-    margin-bottom: 10px;
-}
-```
-
-### Étape 4 : Créer le code JavaScript
-
-#### `app.js`
 ```javascript
-// URL de l'API
-const API_URL = 'https://jsonplaceholder.typicode.com';
+// =======================================================================
+// MICROSERVICE AUTH - PORT 3001
+// =======================================================================
+// Responsabilite : Inscription et Connexion uniquement.
+// Routes :
+//   POST http://localhost:3001/auth/register
+//   POST http://localhost:3001/auth/login
+// =======================================================================
 
-// Récupérer les éléments HTML
-const resultsDiv = document.getElementById('results');
-const loadingDiv = document.getElementById('loading');
-const errorDiv = document.getElementById('error');
+// Charger .env (remonte 2 niveaux car on est dans services/auth-service/)
+require('dotenv').config({ path: '../../.env' });
 
-// ============================================
-// FONCTION POUR CHARGER LES UTILISATEURS
-// ============================================
-function loadUsers() {
-    // Afficher le chargement
-    loadingDiv.classList.remove('hidden');
-    resultsDiv.innerHTML = '';
-    
-    // Appeler l'API
-    fetch(API_URL + '/users')
-        .then(response => response.json())
-        .then(users => {
-            // Cacher le chargement
-            loadingDiv.classList.add('hidden');
-            
-            // Créer le HTML pour chaque utilisateur
-            let html = '<h2>👥 Utilisateurs (' + users.length + ')</h2>';
-            
-            users.forEach(user => {
-                html += `
-                    <div class="user-card">
-                        <h3>${user.name}</h3>
-                        <p>📧 ${user.email}</p>
-                        <p>📱 ${user.phone}</p>
-                        <p>🏢 ${user.company.name}</p>
-                        <p>🌍 ${user.address.city}</p>
-                    </div>
-                `;
-            });
-            
-            resultsDiv.innerHTML = html;
-        })
-        .catch(error => {
-            loadingDiv.classList.add('hidden');
-            errorDiv.innerHTML = '❌ Erreur : ' + error.message;
-            errorDiv.classList.remove('hidden');
-        });
+// Imports des dependances
+const express = require('express');
+const bcrypt  = require('bcryptjs');     // Hasher les mots de passe
+const jwt     = require('jsonwebtoken'); // Creer les tokens JWT
+const fs      = require('fs').promises;  // Lire/ecrire les fichiers JSON
+const path    = require('path');
+
+const app = express();
+
+// ---- MIDDLEWARES ----
+
+// Lire le JSON du body des requetes
+app.use(express.json());
+
+// CORS : autoriser les requetes du navigateur (port 3000 → port 3001)
+// Sans ca, le navigateur bloquerait les appels "cross-origin"
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE');
+  next();
+});
+
+// ---- BASE DE DONNEES ----
+// Chemin absolu vers users.json a la racine du projet
+const USERS_FILE = path.join(__dirname, '../../data/users.json');
+
+// ---- FONCTIONS UTILITAIRES ----
+
+// Lire tous les utilisateurs depuis le fichier JSON
+async function getUsers() {
+  const data = await fs.readFile(USERS_FILE, 'utf8');
+  return JSON.parse(data); // Texte JSON → tableau JavaScript
 }
 
-// ============================================
-// FONCTION POUR CHARGER LES POSTS
-// ============================================
-function loadPosts() {
-    // Afficher le chargement
-    loadingDiv.classList.remove('hidden');
-    resultsDiv.innerHTML = '';
-    
-    // Appeler l'API (limité à 10 posts)
-    fetch(API_URL + '/posts?_limit=10')
-        .then(response => response.json())
-        .then(posts => {
-            // Cacher le chargement
-            loadingDiv.classList.add('hidden');
-            
-            // Créer le HTML pour chaque post
-            let html = '<h2>📝 Posts (' + posts.length + ')</h2>';
-            
-            posts.forEach(post => {
-                html += `
-                    <div class="post-card">
-                        <h3>${post.title}</h3>
-                        <p>${post.body}</p>
-                        <small>Par utilisateur #${post.userId}</small>
-                    </div>
-                `;
-            });
-            
-            resultsDiv.innerHTML = html;
-        })
-        .catch(error => {
-            loadingDiv.classList.add('hidden');
-            errorDiv.innerHTML = '❌ Erreur : ' + error.message;
-            errorDiv.classList.remove('hidden');
-        });
+// Sauvegarder les utilisateurs dans le fichier JSON
+async function saveUsers(users) {
+  // null, 2 = indentation de 2 espaces (fichier lisible)
+  await fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2));
 }
 
-// ============================================
-// FONCTION POUR CHARGER LES PHOTOS
-// ============================================
-function loadPhotos() {
-    // Afficher le chargement
-    loadingDiv.classList.remove('hidden');
-    resultsDiv.innerHTML = '';
-    
-    // Appeler l'API (limité à 6 photos)
-    fetch(API_URL + '/photos?_limit=6')
-        .then(response => response.json())
-        .then(photos => {
-            // Cacher le chargement
-            loadingDiv.classList.add('hidden');
-            
-            // Créer le HTML pour chaque photo
-            let html = '<h2>📸 Photos (' + photos.length + ')</h2>';
-            
-            photos.forEach(photo => {
-                html += `
-                    <div class="photo-card">
-                        <img src="${photo.thumbnailUrl}" alt="${photo.title}">
-                        <h3>${photo.title}</h3>
-                    </div>
-                `;
-            });
-            
-            resultsDiv.innerHTML = html;
-        })
-        .catch(error => {
-            loadingDiv.classList.add('hidden');
-            errorDiv.innerHTML = '❌ Erreur : ' + error.message;
-            errorDiv.classList.remove('hidden');
-        });
-}
+// =======================================================================
+// ROUTE 1 : POST /auth/register — INSCRIPTION
+// =======================================================================
+// Corps de la requete attendu :
+//   { "email": "bob@email.com", "password": "monmotdepasse" }
+//
+// Reponses possibles :
+//   201 Created        → { "message": "Utilisateur cree", "id": 2 }
+//   400 Bad Request    → { "error": "Email deja utilise" }
+//   500 Server Error   → { "error": "Erreur serveur" }
+// =======================================================================
+app.post('/auth/register', async (req, res) => {
+  try {
+    // Extraire les champs du body (grace au middleware express.json())
+    const { email, password } = req.body;
 
-// ============================================
-// FONCTION POUR RECHERCHER
-// ============================================
-function searchPosts() {
-    const searchInput = document.getElementById('searchInput');
-    const searchTerm = searchInput.value;
-    
-    if (searchTerm === '') {
-        alert('Veuillez entrer un terme de recherche');
-        return;
+    // Validation : les deux champs sont obligatoires
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email et mot de passe requis' });
     }
-    
-    // Afficher le chargement
-    loadingDiv.classList.remove('hidden');
-    resultsDiv.innerHTML = '';
-    
-    // Appeler l'API pour tous les posts
-    fetch(API_URL + '/posts')
-        .then(response => response.json())
-        .then(posts => {
-            // Filtrer les posts qui contiennent le terme recherché
-            const filteredPosts = posts.filter(post => 
-                post.title.includes(searchTerm) || 
-                post.body.includes(searchTerm)
-            );
-            
-            // Cacher le chargement
-            loadingDiv.classList.add('hidden');
-            
-            if (filteredPosts.length === 0) {
-                resultsDiv.innerHTML = '<p>Aucun résultat trouvé</p>';
-                return;
-            }
-            
-            // Créer le HTML
-            let html = '<h2>🔍 Résultats (' + filteredPosts.length + ')</h2>';
-            
-            filteredPosts.forEach(post => {
-                html += `
-                    <div class="post-card">
-                        <h3>${post.title}</h3>
-                        <p>${post.body}</p>
-                    </div>
-                `;
-            });
-            
-            resultsDiv.innerHTML = html;
-        })
-        .catch(error => {
-            loadingDiv.classList.add('hidden');
-            errorDiv.innerHTML = '❌ Erreur : ' + error.message;
-            errorDiv.classList.remove('hidden');
-        });
-}
 
-// ============================================
-// CONNECTER LES BOUTONS
-// ============================================
-document.getElementById('loadUsers').onclick = loadUsers;
-document.getElementById('loadPosts').onclick = loadPosts;
-document.getElementById('loadPhotos').onclick = loadPhotos;
-document.getElementById('searchBtn').onclick = searchPosts;
-```
+    // Charger les utilisateurs existants
+    const users = await getUsers();
 
-### 📝 Explications détaillées du code
+    // Verifier que l email n est pas deja utilise
+    // find() retourne undefined si non trouve (= pas d email en double)
+    if (users.find(u => u.email === email)) {
+      return res.status(400).json({ error: 'Email deja utilise' });
+    }
 
-#### 1. **Structure de base**
-```javascript
-const API_URL = 'https://jsonplaceholder.typicode.com';
-```
-- On définit l'adresse de l'API
+    // Hasher le mot de passe avec bcrypt
+    // 10 = salt rounds (nombre de tours de chiffrement)
+    // RESULTAT : "password123" → "$2a$10$N9qo8uLOickgx2ZMRZoMye..."
+    // IMPOSSIBLE de retrouver "password123" depuis le hash
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-#### 2. **Appeler l'API avec fetch()**
-```javascript
-fetch(API_URL + '/users')
-```
-- `fetch()` = demande des données à l'API
-- On donne l'URL complète
+    // Creer l objet utilisateur
+    const newUser = {
+      id: users.length + 1,   // ID auto-incremente
+      email,                   // email: email (syntaxe courte ES6)
+      password: hashedPassword // HASH stocke, jamais le vrai mot de passe
+    };
 
-#### 3. **Convertir en JSON**
-```javascript
-.then(response => response.json())
-```
-- `.then()` = "quand les données arrivent..."
-- `response.json()` = transforme en objet JavaScript
+    // Ajouter au tableau et sauvegarder
+    users.push(newUser);
+    await saveUsers(users);
 
-#### 4. **Utiliser les données**
-```javascript
-.then(users => {
-    // Ici on a les utilisateurs !
-})
-```
-- On reçoit les données et on peut les afficher
+    // 201 = Created : nouvelle ressource creee avec succes
+    res.status(201).json({ message: 'Utilisateur cree', id: newUser.id });
 
-#### 5. **Boucle pour afficher**
-```javascript
-users.forEach(user => {
-    html += '<div>' + user.name + '</div>';
+  } catch (error) {
+    // 500 = erreur inattendue cote serveur
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// =======================================================================
+// ROUTE 2 : POST /auth/login — CONNEXION
+// =======================================================================
+// Corps de la requete attendu :
+//   { "email": "alice@email.com", "password": "password123" }
+//
+// Reponses possibles :
+//   200 OK           → { "message": "...", "token": "eyJhbG...", "userId": 1 }
+//   401 Unauthorized → { "error": "Email ou mot de passe incorrect" }
+//   500 Server Error → { "error": "Erreur serveur" }
+// =======================================================================
+app.post('/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const users = await getUsers();
+
+    // Chercher l utilisateur par email
+    const user = users.find(u => u.email === email);
+
+    // Si l email n existe pas dans la base
+    // On dit "email OU mot de passe incorrect" → ne pas reveler si l email existe
+    if (!user) {
+      return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+    }
+
+    // Comparer le mot de passe saisi avec le hash stocke
+    // bcrypt.compare() ne decode PAS le hash, il rehache et compare
+    const validPassword = await bcrypt.compare(password, user.password);
+
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+    }
+
+    // ---------------------------------------------------------------
+    // CREATION DU TOKEN JWT
+    // jwt.sign(payload, cleSecrete, options) :
+    //
+    //   payload    : donnees encodees dans le token
+    //                → { userId: 1 }
+    //                → NE PAS mettre le mot de passe ici !
+    //
+    //   cleSecrete : chaine connue seulement du serveur
+    //                → depuis .env pour ne pas l exposer
+    //
+    //   options    : { expiresIn: '24h' }
+    //                → le token sera invalide apres 24 heures
+    //
+    // RESULTAT :
+    //   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjF9.abc123"
+    //    ←──────── HEADER ────────────────────→←── PAYLOAD ──→←─ SIGN ─→
+    // ---------------------------------------------------------------
+    const token = jwt.sign(
+      { userId: user.id },       // Payload : donnees dans le token
+      process.env.SECRET_KEY,    // Cle secrete depuis .env
+      { expiresIn: '24h' }       // Expiration : 24 heures
+    );
+
+    // Envoyer le token au client
+    // Le client DOIT stocker ce token et l envoyer dans chaque requete suivante
+    // Header : "Authorization: Bearer eyJhbGci..."
+    res.json({
+      message: 'Connexion reussie',
+      token,           // Token a stocker et transmettre
+      userId: user.id  // Utile pour l interface
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ---- DEMARRER LE SERVICE ----
+const PORT = 3001;
+app.listen(PORT, () => {
+  console.log(`\n Auth Service    → http://localhost:${PORT}`);
+  console.log(`   POST /auth/register  (inscription)`);
+  console.log(`   POST /auth/login     (connexion)\n`);
 });
 ```
-- `forEach()` = pour chaque élément du tableau
-- On crée du HTML pour chaque utilisateur
 
-#### 6. **Gérer les erreurs**
+---
+
+## 9. TASKS SERVICE — services/tasks-service/server.js
+
+### Role
+
+Ce microservice gere UNIQUEMENT les taches (CRUD complet).
+Il est independant d Auth Service MAIS il verifie les tokens JWT lui-meme
+en utilisant la meme SECRET_KEY.
+
+### Code complet avec explications
+
 ```javascript
-.catch(error => {
-    // Si ça ne marche pas
-})
+// =======================================================================
+// MICROSERVICE TASKS - PORT 3002
+// =======================================================================
+// Responsabilite : CRUD des taches.
+// Toutes les routes sont protegees par JWT.
+// Routes :
+//   GET    http://localhost:3002/tasks
+//   POST   http://localhost:3002/tasks
+//   PATCH  http://localhost:3002/tasks/:id
+//   DELETE http://localhost:3002/tasks/:id
+// =======================================================================
+
+require('dotenv').config({ path: '../../.env' });
+
+const express = require('express');
+const jwt     = require('jsonwebtoken'); // Verifier les tokens (pas les creer)
+const fs      = require('fs').promises;
+const path    = require('path');
+
+const app = express();
+
+// ---- MIDDLEWARES ----
+
+app.use(express.json());
+
+// CORS : autoriser les requetes du navigateur (port 3000 → port 3002)
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE');
+  next();
+});
+
+// ---- BASE DE DONNEES ----
+const TASKS_FILE = path.join(__dirname, '../../data/tasks.json');
+
+// ---- FONCTIONS UTILITAIRES ----
+
+async function getTasks() {
+  const data = await fs.readFile(TASKS_FILE, 'utf8');
+  return JSON.parse(data);
+}
+
+async function saveTasks(tasks) {
+  await fs.writeFile(TASKS_FILE, JSON.stringify(tasks, null, 2));
+}
+
+// =======================================================================
+// MIDDLEWARE verifyToken — VERIFICATION DU TOKEN JWT
+// =======================================================================
+// S execute AVANT chaque route protegee.
+// Si le token est absent ou invalide → bloque la requete.
+// Si le token est valide → ajoute req.userId et passe a la route.
+//
+// FLUX :
+//   Requete → verifyToken() → OK  → route → reponse
+//                          → KO  → erreur 401/403 (bloque ici)
+//
+// POURQUOI Tasks Service verifie lui-meme ?
+//   Independance des services. Chaque service peut fonctionner seul.
+//   Les deux services partagent SECRET_KEY → ils peuvent tous deux
+//   verifier les tokens crees par Auth Service.
+// =======================================================================
+function verifyToken(req, res, next) {
+
+  // Lire le header Authorization
+  // Client envoie : "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  //
+  // req.headers.authorization = "Bearer eyJhbGci..."
+  // ?.split(' ')               = ["Bearer", "eyJhbGci..."]  (le ?. evite l erreur si undefined)
+  // [1]                        = "eyJhbGci..."              (on prend juste le token)
+  const token = req.headers.authorization?.split(' ')[1];
+
+  // Pas de token fourni → refuser l acces
+  if (!token) {
+    // 401 Unauthorized : le client ne s est pas authentifie
+    return res.status(401).json({ error: 'Token manquant' });
+  }
+
+  try {
+    // Verifier ET decoder le token
+    // jwt.verify() fait 2 choses :
+    //   1. Verifie la SIGNATURE (le token n a pas ete modifie)
+    //   2. Verifie l EXPIRATION (le token n est pas expire)
+    // Si une verification echoue → exception → catch() → erreur 403
+    const decoded = jwt.verify(token, process.env.SECRET_KEY);
+    // decoded = { userId: 1, iat: 1745678900, exp: 1745765300 }
+
+    // Ajouter userId a req pour que les routes puissent l utiliser
+    req.userId = decoded.userId;
+
+    // Token valide → passer a la route suivante
+    next();
+
+  } catch (error) {
+    // 403 Forbidden : identifie mais token invalide ou expire
+    return res.status(403).json({ error: 'Token invalide' });
+  }
+}
+
+// =======================================================================
+// ROUTE 1 : GET /tasks — LIRE toutes ses taches
+// =======================================================================
+// Headers requis : Authorization: Bearer <token>
+//
+// Reponse :
+//   200 OK → { "tasks": [ { id, userId, titre, completed }, ... ] }
+// =======================================================================
+app.get('/tasks', verifyToken, async (req, res) => {
+  //              ↑ verifyToken s execute en premier avant la fonction
+  try {
+    const tasks = await getTasks();
+
+    // Filtrer les taches de CET utilisateur uniquement
+    // req.userId a ete defini par verifyToken
+    // Chaque utilisateur ne voit QUE ses propres taches
+    const userTasks = tasks.filter(t => t.userId === req.userId);
+
+    res.json({ tasks: userTasks });
+
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// =======================================================================
+// ROUTE 2 : POST /tasks — CREER une tache
+// =======================================================================
+// Headers requis : Authorization: Bearer <token>
+// Corps attendu  : { "titre": "Ma nouvelle tache" }
+//
+// Reponse :
+//   201 Created → { "message": "Tache creee", "task": { ... } }
+// =======================================================================
+app.post('/tasks', verifyToken, async (req, res) => {
+  try {
+    const { titre } = req.body;
+
+    if (!titre) {
+      return res.status(400).json({ error: 'Titre requis' });
+    }
+
+    const tasks = await getTasks();
+
+    const newTask = {
+      id: tasks.length + 1,  // ID auto-incremente
+      userId: req.userId,    // Lie la tache a l utilisateur connecte
+      titre,
+      completed: false       // Nouvelle tache = non terminee par defaut
+    };
+
+    tasks.push(newTask);
+    await saveTasks(tasks);
+
+    res.status(201).json({ message: 'Tache creee', task: newTask });
+
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// =======================================================================
+// ROUTE 3 : PATCH /tasks/:id — MODIFIER une tache
+// =======================================================================
+// Inverse l etat completed : false → true ou true → false.
+// Securite : l utilisateur ne peut modifier QUE ses propres taches.
+//
+// Headers requis : Authorization: Bearer <token>
+// URL exemple    : PATCH /tasks/3
+//
+// Reponse :
+//   200 OK  → { "message": "Tache mise a jour", "task": { ... } }
+//   404     → { "error": "Tache non trouvee" }
+// =======================================================================
+app.patch('/tasks/:id', verifyToken, async (req, res) => {
+  try {
+    // req.params.id = "3" (chaine) → parseInt() = 3 (nombre)
+    const taskId = parseInt(req.params.id);
+    const tasks  = await getTasks();
+
+    // Chercher la tache avec DOUBLE condition :
+    //   1. t.id === taskId         → l ID correspond
+    //   2. t.userId === req.userId → elle appartient a cet utilisateur
+    // Si Alice essaie de modifier la tache de Bob → non trouve → 404
+    const task = tasks.find(t => t.id === taskId && t.userId === req.userId);
+
+    if (!task) {
+      return res.status(404).json({ error: 'Tache non trouvee' });
+    }
+
+    // Inverser l etat : false → true, true → false
+    task.completed = !task.completed;
+
+    await saveTasks(tasks);
+    res.json({ message: 'Tache mise a jour', task });
+
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// =======================================================================
+// ROUTE 4 : DELETE /tasks/:id — SUPPRIMER une tache
+// =======================================================================
+// Securite : l utilisateur ne peut supprimer QUE ses propres taches.
+//
+// Headers requis : Authorization: Bearer <token>
+// URL exemple    : DELETE /tasks/3
+//
+// Reponse :
+//   200 OK → { "message": "Tache supprimee" }
+//   404    → { "error": "Tache non trouvee" }
+// =======================================================================
+app.delete('/tasks/:id', verifyToken, async (req, res) => {
+  try {
+    const taskId = parseInt(req.params.id);
+    let tasks    = await getTasks();
+
+    // findIndex() retourne la POSITION dans le tableau (ou -1 si non trouve)
+    // On a besoin de la position pour utiliser splice()
+    const index = tasks.findIndex(t => t.id === taskId && t.userId === req.userId);
+
+    if (index === -1) {
+      return res.status(404).json({ error: 'Tache non trouvee' });
+    }
+
+    // splice(position, nombreASupprimer) : supprime des elements du tableau
+    // splice(1, 1) sur [a, b, c] → [a, c]
+    tasks.splice(index, 1);
+
+    await saveTasks(tasks);
+    res.json({ message: 'Tache supprimee' });
+
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ---- DEMARRER LE SERVICE ----
+const PORT = 3002;
+app.listen(PORT, () => {
+  console.log(`\n Tasks Service   → http://localhost:${PORT}`);
+  console.log(`   GET    /tasks         (lire les taches)`);
+  console.log(`   POST   /tasks         (creer une tache)`);
+  console.log(`   PATCH  /tasks/:id     (modifier une tache)`);
+  console.log(`   DELETE /tasks/:id     (supprimer une tache)\n`);
+});
 ```
-- `.catch()` = attrape les erreurs
-
-### 🎯 Points d'apprentissage clés
-
-1. **Fetch API** : Fonction simple pour appeler une API
-2. **Promises** : `.then()` pour gérer les réponses
-3. **JSON** : Format d'échange de données
-4. **forEach** : Boucle pour parcourir les données
-5. **Gestion d'erreurs** : `.catch()` pour attraper les problèmes
-
-### 🚀 Pour tester l'application
-
-Ouvrez simplement `index.html` dans votre navigateur - pas besoin de serveur local car l'API est sur Internet !
-
-### 📚 Autres API publiques gratuites à explorer
-
-1. **REST Countries** : `https://restcountries.com/v3.1/all`
-   - Informations sur tous les pays
-
-2. **Open Meteo** : `https://api.open-meteo.com/v1/forecast?latitude=48.85&longitude=2.35&current_weather=true`
-   - Météo en temps réel
-
-3. **Dog API** : `https://dog.ceo/api/breeds/image/random`
-   - Images aléatoires de chiens
-
-4. **Advice Slip** : `https://api.adviceslip.com/advice`
-   - Conseils aléatoires
 
 ---
 
-## 📊 Comparaison des deux exercices
+## 10. INTERFACE WEB — public/index.html
 
-| Aspect | Exercice 1 (Local) | Exercice 2 (API Publique) |
-|--------|-------------------|---------------------------|
-| **Source** | Fichiers JSON locaux | API REST sur Internet |
-| **Serveur** | Nécessaire | Pas nécessaire |
-| **Données** | Statiques | Dynamiques |
-| **Latence** | Très faible | Variable (réseau) |
-| **Disponibilité** | 100% | Dépend de l'API |
-| **Cas d'usage** | Prototypage, tests | Production |
+### Role
 
----
+Fichier HTML servi par `api.js` sur le port 3000.
+Permet de tester l application visuellement sans utiliser PowerShell.
 
-## ✅ Checklist d'apprentissage
+### Ce que fait l interface
 
-Après ce TD, vous devriez être capable de :
+```
+Onglet 1 : AUTHENTIFICATION
+  ┌─────────────────────────────┐
+  │  Email    : [____________]  │
+  │  Password : [____________]  │
+  │                             │
+  │  [SE CONNECTER]             │ → POST http://localhost:3001/auth/login
+  │  [CREER UN COMPTE]          │ → POST http://localhost:3001/auth/register
+  │                             │
+  │  Compte de test :           │
+  │  alice@email.com / password123 │
+  └─────────────────────────────┘
 
-- [ ] Expliquer ce qu'est une API REST
-- [ ] Comprendre les méthodes HTTP (GET, POST, etc.)
-- [ ] Utiliser l'API Fetch en JavaScript
-- [ ] Gérer les promesses avec async/await
-- [ ] Traiter les erreurs avec try/catch
-- [ ] Comprendre l'architecture microservices
-- [ ] Lire et manipuler des données JSON
-- [ ] Afficher des données dynamiques dans une interface
-- [ ] Consommer des API publiques
-- [ ] Utiliser des paramètres d'URL
+Onglet 2 : MES TACHES (visible apres connexion)
+  ┌─────────────────────────────┐
+  │  Token JWT : eyJhbGci...    │ ← Token recu du serveur
+  │                             │
+  │  Nouvelle tache : [______]  │
+  │  [AJOUTER LA TACHE]         │ → POST http://localhost:3002/tasks
+  │                             │
+  │  ┌───────────────────────┐  │
+  │  │ Apprendre JWT         │  │ → PATCH  /tasks/1  (terminer)
+  │  │ [TERMINER] [SUPPRIMER]│  │ → DELETE /tasks/1  (supprimer)
+  │  └───────────────────────┘  │
+  │                             │
+  │  [SE DECONNECTER]           │
+  └─────────────────────────────┘
+```
 
----
+### Comment l interface appelle les microservices
 
-## 🎓 Exercices supplémentaires
+```javascript
+// Dans index.html (JavaScript cote client)
 
-### Exercice 3 : Améliorer l'application
-1. Ajouter un bouton "Rafraîchir" pour recharger les données
-2. Implémenter une pagination pour les résultats
-3. Ajouter des filtres (tri par nom, date, etc.)
-4. Sauvegarder les résultats dans le localStorage
+// Les deux services ont des URL DIFFERENTES
+const AUTH_URL  = 'http://localhost:3001';  // Auth Service
+const TASKS_URL = 'http://localhost:3002';  // Tasks Service
 
-### Exercice 4 : Créer votre propre API
-1. Utiliser Node.js et Express pour créer une API simple
-2. Implémenter les méthodes CRUD (Create, Read, Update, Delete)
-3. Consommer votre API depuis une interface web
+// Connexion → appel vers Auth Service
+fetch(`${AUTH_URL}/auth/login`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ email, password })
+});
 
-### Exercice 5 : Intégration avancée
-1. Combiner plusieurs API (utilisateurs + posts + commentaires)
-2. Afficher les relations entre les données
-3. Implémenter une vraie recherche avec auto-complétion
-
----
-
-## 📖 Ressources complémentaires
-
-### Documentation
-- [MDN - Fetch API](https://developer.mozilla.org/fr/docs/Web/API/Fetch_API)
-- [MDN - Promises](https://developer.mozilla.org/fr/docs/Web/JavaScript/Reference/Global_Objects/Promise)
-- [REST API Tutorial](https://restfulapi.net/)
-
-### Outils utiles
-- **Postman** : Tester des API REST
-- **JSON Formatter** : Extension Chrome pour visualiser le JSON
-- **DevTools** : Onglet Network pour voir les requêtes HTTP
-
-### API publiques gratuites
-- [Public APIs](https://github.com/public-apis/public-apis) - Liste de centaines d'API
-- [JSONPlaceholder](https://jsonplaceholder.typicode.com/) - API de test
-- [RapidAPI](https://rapidapi.com/) - Marketplace d'API
+// Lire les taches → appel vers Tasks Service avec le TOKEN
+fetch(`${TASKS_URL}/tasks`, {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
+```
 
 ---
 
-## 🎉 Conclusion
+## 11. ARCHITECTURE MICROSERVICES EXPLIQUEE
 
-Félicitations ! Vous avez maintenant une compréhension solide de :
+### Definition
 
-1. **API REST** : Comment elles fonctionnent et pourquoi elles sont importantes
-2. **Microservices** : Architecture moderne des applications
-3. **Consommation d'API** : Deux approches (locale et distante)
-4. **JavaScript moderne** : Fetch, async/await, Promises
-5. **Développement web** : Interface interactive et responsive
+Les microservices = decoupe l application en plusieurs petits services
+independants, chacun avec sa propre responsabilite et son propre port.
 
-Les API REST sont au cœur du développement web moderne. Cette connaissance vous servira dans tous vos futurs projets !
+### Comparaison detaillee
+
+```
+MONOLITHIQUE (un seul api.js)      MICROSERVICES (notre projet)
+──────────────────────────────     ────────────────────────────────────
+Un seul serveur                    Plusieurs serveurs independants
+Un seul port                       Un port par service
+Tout meurt si une partie plante    Chaque service peut survivre seul
+Tout se deploie ensemble           Chaque service se deploie seul
+Un seul npm start                  npm run start:all (3 serveurs)
+```
+
+### Communication entre services
+
+Dans notre projet, les services ne se parlent PAS entre eux.
+C est l interface web (navigateur) qui appelle chaque service directement.
+
+```
+Navigateur                Auth Service         Tasks Service
+    │                         │                     │
+    │── POST /auth/login ────► │                     │
+    │◄── { token } ───────────│                     │
+    │                         │                     │
+    │── GET /tasks ───────────────────────────────► │
+    │   (avec le token dans   │                     │
+    │    le header)           │                     │
+    │◄── { tasks: [...] } ──────────────────────────│
+```
+
+### La cle qui relie les deux services
+
+Les deux services sont independants MAIS ils partagent la meme `SECRET_KEY`.
+C est ce qui permet a Tasks Service de valider les tokens crees par Auth Service.
+
+```
+AUTH SERVICE                          TASKS SERVICE
+─────────────────────────────────     ──────────────────────────────────
+jwt.sign({ userId: 1 },               jwt.verify(token,
+  process.env.SECRET_KEY,   ←──────→    process.env.SECRET_KEY)
+  { expiresIn: '24h' })
+  → cree le token                       → verifie le token
+
+Les deux utilisent LA MEME SECRET_KEY → communication securisee
+sans que les services se parlent directement
+```
+
+### Independance des services
+
+```
+Scenario 1 : Auth Service s arrete
+─────────────────────────────────
+Auth Service ← ARRETE
+Tasks Service ← TOURNE ENCORE
+
+Utilisateurs deja connectes (avec un token valide) ?
+→ Peuvent encore utiliser Tasks Service normalement
+→ Leur token est valide 24h
+
+Nouveaux utilisateurs ?
+→ Ne peuvent pas se connecter (Auth Service est down)
+→ Mais les autres continuent
+
+Conclusion : les services sont independants !
+```
 
 ---
 
-**Bon apprentissage ! 🚀**
+## 12. JWT EXPLIQUE DE A A Z
+
+### Definition
+
+JWT = JSON Web Token = Un "badge numerique" signe et portable.
+
+```
+AVANT JWT (sessions) :                AVEC JWT :
+──────────────────────────────────    ──────────────────────────
+1. Client se connecte                 1. Client se connecte
+2. Serveur cree une session           2. Serveur cree un TOKEN signe
+3. Serveur MEMORISE la session        3. Serveur envoie le token au client
+4. Client envoie l ID de session      4. Client PORTE son token
+5. Serveur cherche la session         5. Serveur VERIFIE juste la signature
+   → Probleme : si le serveur           → Pas de memoire serveur necessaire
+     redémarre, sessions perdues         → Fonctionne avec plusieurs serveurs
+```
+
+### Cycle de vie complet
+
+```
+ETAPE 1 : CONNEXION
+──────────────────
+Client ─── POST /auth/login ──────────────────────► Auth Service
+           { email, password }
+                                                          │
+                                                   Verifie bcrypt
+                                                          │
+                                                   jwt.sign({ userId: 1 },
+                                                     SECRET_KEY, { expiresIn: '24h' })
+                                                          │
+Client ◄── { token: "eyJhbG...", userId: 1 } ────────────┘
+
+ETAPE 2 : UTILISER LE TOKEN
+───────────────────────────
+Client ─── GET /tasks ────────────────────────────► Tasks Service
+           Header: Authorization: Bearer eyJhbG...
+                                                          │
+                                               verifyToken() middleware
+                                               jwt.verify(token, SECRET_KEY)
+                                               → decoded = { userId: 1, ... }
+                                               → req.userId = 1
+                                                          │
+                                               Filtre les taches de userId=1
+                                                          │
+Client ◄── { tasks: [ ... taches de userId 1 ... ] } ────┘
+```
+
+### Structure d un token JWT
+
+Un token ressemble a cela :
+
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjF9.abc123xyz
+```
+
+Il est compose de 3 parties separees par des `.` :
+
+```
+PARTIE 1       PARTIE 2       PARTIE 3
+(HEADER)       (PAYLOAD)      (SIGNATURE)
+    │               │               │
+    ▼               ▼               ▼
+Base64Url       Base64Url       HMACSHA256(
+encode de :     encode de :       header + payload,
+                                  SECRET_KEY
+{ "alg": "HS256",  { "userId": 1,  )
+  "typ": "JWT" }     "iat": 123...,
+                     "exp": 456... }
+```
+
+Decoder la partie PAYLOAD (exemple avec jwt.io) :
+
+```json
+{
+  "userId": 1,
+  "iat": 1745678900,
+  "exp": 1745765300
+}
+```
+
+```
+userId : l ID de l utilisateur qu on a mis dans jwt.sign()
+iat    : "Issued At"  = timestamp Unix de creation
+exp    : "Expiration" = timestamp Unix d expiration
+```
+
+### Securite du JWT
+
+```
+LE PAYLOAD N EST PAS CHIFFRE :
+→ Tout le monde peut decoder la partie PAYLOAD (c est du Base64)
+→ MAIS impossible de modifier le payload sans invalider la signature
+
+TENTATIVE DE PIRATAGE :
+1. Pirate intercepte le token d Alice
+2. Il decode le payload : { "userId": 1 }
+3. Il modifie : { "userId": 999 }
+4. Il rencode en Base64
+5. Il renvoie le token modifie
+
+RESULTAT :
+jwt.verify() recalcule la signature avec le NOUVEAU payload
+La nouvelle signature ≠ la signature originale
+→ Le token est REJETE → Erreur 403 Forbidden
+
+CONCLUSION :
+Le payload est LISIBLE mais pas MODIFIABLE sans la SECRET_KEY
+```
+
+### Code de reference
+
+```javascript
+// CREER un token (dans Auth Service)
+const token = jwt.sign(
+  { userId: user.id },       // Payload
+  process.env.SECRET_KEY,    // Cle secrete
+  { expiresIn: '24h' }       // Options
+);
+
+// VERIFIER un token (dans Tasks Service)
+try {
+  const decoded = jwt.verify(token, process.env.SECRET_KEY);
+  // decoded = { userId: 1, iat: ..., exp: ... }
+  console.log(decoded.userId); // 1
+} catch (error) {
+  // Token invalide ou expire
+  console.log('Acces refuse');
+}
+
+// ENVOYER le token dans une requete (cote client)
+fetch('/tasks', {
+  headers: {
+    'Authorization': `Bearer ${token}`
+  }
+});
+
+// RECUPERER le token depuis le header (cote serveur)
+const token = req.headers.authorization?.split(' ')[1];
+// "Bearer eyJhbGci..."  →  ["Bearer", "eyJhbGci..."]  →  [1]  =  "eyJhbGci..."
+```
+
+---
+
+## 13. bcrypt EXPLIQUE DE A A Z
+
+### Le probleme sans bcrypt
+
+```json
+// CE QU ON NE DOIT JAMAIS FAIRE : mots de passe en clair
+{
+  "email": "alice@email.com",
+  "password": "password123"
+}
+```
+
+Si un pirate accede a la base de donnees → il voit tous les mots de passe.
+
+### La solution : hachage avec bcrypt
+
+```
+"password123"
+      │
+      ▼
+bcrypt.hash("password123", 10)
+      │
+      ▼
+"$2a$10$N9qo8uLOickgx2ZMRZoMyeQi8Ke/r6yEqK8Ix6vUx4FGYmvnFwsW"
+      │
+      ▼
+C est ce hash qui est stocke en base.
+Meme si quelqu un vole la base → il ne peut pas retrouver "password123"
+```
+
+### Les 3 proprietes essentielles de bcrypt
+
+```
+1. IRREVERSIBLE
+   "password123" → hash    ✓ (hacher)
+   hash → "password123"    ✗ (impossible de retrouver)
+
+2. AVEC SALT (unicite)
+   bcrypt.hash("password123", 10) → "$2a$10$abc..."
+   bcrypt.hash("password123", 10) → "$2a$10$xyz..."  ← different !
+   Meme mot de passe = hash different a chaque fois
+   (Le salt est genere aleatoirement et inclus dans le hash)
+
+3. LENT PAR CONCEPTION (protection brute force)
+   1 hash ≈ 100 millisecondes
+   Tester 1 million de mots de passe = 27 heures
+   → Rend les attaques "force brute" impossibles en pratique
+```
+
+### Code de reference
+
+```javascript
+// INSCRIPTION : hasher le mot de passe avant de le stocker
+const saltRounds = 10; // Nombre de tours (plus eleve = plus lent et securise)
+const hash = await bcrypt.hash("password123", saltRounds);
+// Stocker 'hash' dans la base, jamais "password123"
+
+// CONNEXION : comparer le mot de passe saisi avec le hash stocke
+const estValide = await bcrypt.compare("password123", hash);
+// true  → mot de passe correct
+// false → mot de passe incorrect
+```
+
+### Ce qui est stocke dans users.json
+
+```json
+{
+  "id": 1,
+  "email": "alice@email.com",
+  "password": "$2a$10$N9qo8uLOickgx2ZMRZoMyeQi8Ke/r6yEqK8Ix6vUx4FGYmvnFwsW"
+}
+```
+
+---
+
+## 14. LES MIDDLEWARES EXPLIQUES
+
+### Definition
+
+Un middleware = une fonction qui s execute ENTRE la reception de la requete
+et l envoi de la reponse.
+
+```
+Requete → [Middleware 1] → [Middleware 2] → [Route] → Reponse
+```
+
+### Signature d un middleware
+
+```javascript
+// Tout middleware a la meme forme : 3 parametres
+function monMiddleware(req, res, next) {
+  //
+  // ... traitement ...
+  //
+  next(); // OBLIGATOIRE : passe au middleware/route suivant(e)
+          // Si next() n est pas appele → la requete est bloquee !
+}
+```
+
+### Les middlewares dans ce projet
+
+```
+Requete entrante
+      │
+      ▼
+┌─────────────────────────────────────┐
+│  Middleware 1 : express.json()      │  Lit le JSON du body → req.body
+└──────────────────┬──────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────┐
+│  Middleware 2 : CORS                │  Autorise les requetes cross-origin
+└──────────────────┬──────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────┐
+│  Middleware 3 : verifyToken()       │  Verifie le token JWT (routes protegees)
+│  (uniquement sur /tasks)            │  → ajoute req.userId
+└──────────────────┬──────────────────┘
+                   │
+                   ▼
+           [Route handler]
+           Code metier de la route
+```
+
+### Utiliser un middleware sur une seule route
+
+```javascript
+// Syntaxe : app.methode(url, middleware, handler)
+app.get('/tasks', verifyToken, async (req, res) => {
+  //              ↑
+  //   verifyToken s execute en premier
+  //   Si token invalide → stoppe ici
+  //   Si token valide   → passe a la fonction suivante
+  
+  const tasks = await getTasks();
+  res.json({ tasks });
+});
+```
+
+---
+
+## 15. CORS EXPLIQUE
+
+### Le probleme
+
+Le navigateur bloque par securite les requetes vers un port (ou domaine) different.
+
+```
+Interface web sur port 3000 appelle Auth Service sur port 3001
+
+SANS CORS :
+Navigateur → "Je vais appeler http://localhost:3001/auth/login"
+Navigateur → BLOQUE ! La reponse vient d un port different → erreur CORS
+
+AVEC CORS (header Access-Control-Allow-Origin: *) :
+Navigateur → "Je vais appeler http://localhost:3001/auth/login"
+Serveur    → "Je t autorise (Access-Control-Allow-Origin: *)"
+Navigateur → OK, je passe la reponse au JavaScript
+```
+
+### Code CORS dans nos services
+
+```javascript
+app.use((req, res, next) => {
+  // * = toute origine autorisee (en production, specifier le domaine exact)
+  res.header('Access-Control-Allow-Origin', '*');
+  
+  // Autoriser ces en-tetes dans les requetes du client
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  // Autoriser ces methodes HTTP
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE');
+  
+  // Passer au middleware suivant
+  next();
+});
+```
+
+---
+
+## 16. TESTER L APPLICATION
+
+### Demarrage
+
+```powershell
+# Installer les dependances (une seule fois)
+npm install
+
+# Lancer les 3 serveurs
+npm run start:all
+```
+
+### Test via l interface web (recommande pour debutants)
+
+1. Ouvrir le navigateur : http://localhost:3000
+2. Se connecter avec `alice@email.com` / `password123`
+3. Observer le token JWT qui s affiche
+4. Creer, modifier, supprimer des taches
+
+### Tests via PowerShell (recommande pour comprendre les requetes HTTP)
+
+#### S inscrire
+
+```powershell
+$body = @{
+  email    = 'etudiant@email.com'
+  password = 'monmotdepasse'
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method POST `
+  -Uri http://localhost:3001/auth/register `
+  -Body $body `
+  -ContentType 'application/json'
+```
+
+Reponse attendue :
+
+```json
+{ "message": "Utilisateur cree", "id": 2 }
+```
+
+#### Se connecter et recuperer le token
+
+```powershell
+$body = @{
+  email    = 'alice@email.com'
+  password = 'password123'
+} | ConvertTo-Json
+
+$response = Invoke-RestMethod `
+  -Method POST `
+  -Uri http://localhost:3001/auth/login `
+  -Body $body `
+  -ContentType 'application/json'
+
+# Stocker le token dans une variable
+$token = $response.token
+Write-Host "Token JWT : $token"
+```
+
+Reponse attendue :
+
+```json
+{
+  "message": "Connexion reussie",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "userId": 1
+}
+```
+
+#### Voir ses taches (avec le token)
+
+```powershell
+$headers = @{ Authorization = "Bearer $token" }
+
+Invoke-RestMethod `
+  -Uri http://localhost:3002/tasks `
+  -Headers $headers
+```
+
+#### Creer une tache
+
+```powershell
+$headers = @{ Authorization = "Bearer $token" }
+$body = @{ titre = 'Faire les courses' } | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method POST `
+  -Uri http://localhost:3002/tasks `
+  -Body $body `
+  -ContentType 'application/json' `
+  -Headers $headers
+```
+
+#### Modifier une tache (toggle completed)
+
+```powershell
+$headers = @{ Authorization = "Bearer $token" }
+
+Invoke-RestMethod `
+  -Method PATCH `
+  -Uri http://localhost:3002/tasks/1 `
+  -Headers $headers
+```
+
+#### Supprimer une tache
+
+```powershell
+$headers = @{ Authorization = "Bearer $token" }
+
+Invoke-RestMethod `
+  -Method DELETE `
+  -Uri http://localhost:3002/tasks/1 `
+  -Headers $headers
+```
+
+#### Tester sans token (doit echouer)
+
+```powershell
+Invoke-RestMethod -Uri http://localhost:3002/tasks
+# Reponse : { "error": "Token manquant" }  Code : 401
+```
+
+#### Tester avec un faux token (doit echouer)
+
+```powershell
+$headers = @{ Authorization = "Bearer tokenfalsifie" }
+Invoke-RestMethod -Uri http://localhost:3002/tasks -Headers $headers
+# Reponse : { "error": "Token invalide" }  Code : 403
+```
+
+---
+
+## 17. GLOSSAIRE COMPLET
+
+| Terme | Definition |
+|-------|-----------|
+| **API** | Application Programming Interface : interface de communication entre programmes |
+| **REST** | Representational State Transfer : style d architecture pour les API HTTP |
+| **Microservice** | Petit service independant avec une responsabilite unique |
+| **Monolithique** | Application ou tout le code est dans un seul programme |
+| **Express** | Framework web pour Node.js qui simplifie la creation de serveurs HTTP |
+| **Node.js** | Environnement qui permet d executer JavaScript hors navigateur |
+| **npm** | Node Package Manager : gestionnaire de paquets de Node.js |
+| **package.json** | Fichier de configuration du projet (dependances, scripts, metadata) |
+| **node_modules** | Dossier contenant les packages installes par npm |
+| **Route** | Combinaison methode HTTP + URL + fonction de traitement |
+| **Endpoint** | URL specifique d une API (ex : /tasks, /auth/login) |
+| **Middleware** | Fonction executee entre la reception et la reponse |
+| **req** | Objet contenant les informations de la requete (body, headers, params...) |
+| **res** | Objet permettant d envoyer la reponse au client |
+| **next()** | Fonction qui passe au middleware ou route suivant(e) |
+| **CRUD** | Create Read Update Delete : les 4 operations de base |
+| **JWT** | JSON Web Token : token signe qui prouve l identite |
+| **Payload** | Donnees contenues dans un JWT (non chiffrees mais signees) |
+| **Signature** | Partie du JWT garantissant qu il n a pas ete modifie |
+| **SECRET_KEY** | Cle secrete utilisee pour signer et verifier les tokens JWT |
+| **Bearer** | Prefixe du token dans le header Authorization |
+| **bcrypt** | Algorithme de hachage concu pour les mots de passe |
+| **Hash** | Resultat du hachage (chaine illisible et irreversible) |
+| **Salt** | Valeur aleatoire ajoutee au mot de passe avant hachage (unicite) |
+| **Salt rounds** | Nombre de tours de chiffrement bcrypt (10 = standard) |
+| **CORS** | Cross-Origin Resource Sharing : mecanisme d autorisation cross-domaine |
+| **.env** | Fichier stockant les variables d environnement secretes |
+| **process.env** | Objet Node.js permettant d acceder aux variables d environnement |
+| **async/await** | Syntaxe JavaScript pour gerer les operations asynchrones |
+| **JSON** | JavaScript Object Notation : format d echange de donnees |
+| **Status Code** | Code numerique HTTP indiquant le resultat (200, 201, 400, 401, 403, 404, 500) |
+| **Authorization header** | En-tete HTTP transportant le token d authentification |
+| **concurrently** | Package npm permettant de lancer plusieurs commandes en parallele |
+| **nodemon** | Outil de developpement qui redémarre automatiquement le serveur |
+
+---
+
+## 18. QUESTIONS DE VALIDATION
+
+### Niveau 1 : Comprehension de base
+
+1. Quelle est la difference entre une application monolithique et une architecture microservices ?
+2. Sur quel port tourne chaque service de ce projet ?
+3. Pourquoi ne stocke-t-on pas les mots de passe en clair dans la base de donnees ?
+4. Qu est-ce qu un middleware ? Donnez un exemple dans ce projet.
+5. Que signifie CRUD ? Donnez la methode HTTP correspondant a chaque operation.
+
+### Niveau 2 : Comprehension approfondie
+
+6. Pourquoi le fichier `.env` ne doit-il jamais etre envoye sur Git ?
+7. Qu est-ce que le CORS ? Pourquoi est-il necessaire dans ce projet ?
+8. Que se passe-t-il si on supprime le middleware `express.json()` ?
+9. Pourquoi `jwt.verify()` peut-il rejeter un token meme si la signature est valide ?
+10. Pourquoi le payload du JWT n est-il pas chiffre ? Quelles sont les consequences ?
+
+### Niveau 3 : Analyse du code
+
+11. Dans `verifyToken()`, expliquez ce que fait `req.headers.authorization?.split(' ')[1]`
+12. Dans `GET /tasks`, pourquoi utilise-t-on `filter()` au lieu de retourner toutes les taches ?
+13. Dans `POST /auth/login`, pourquoi dit-on "email OU mot de passe incorrect" au lieu de "email inconnu" ?
+14. Expliquez la double condition dans `tasks.find(t => t.id === taskId && t.userId === req.userId)`
+15. Comment Tasks Service peut-il valider les tokens crees par Auth Service sans les contacter ?
+
+### Reponses rapides (pour auto-correction)
+
+```
+1.  Monolithique = 1 serveur tout-en-un / Microservices = plusieurs services independants
+2.  api.js=3000, auth-service=3001, tasks-service=3002
+3.  Si la base est volee, les mots de passe ne sont pas exposes
+4.  Fonction entre requete et reponse. Ex : verifyToken(), express.json()
+5.  Create=POST, Read=GET, Update=PATCH, Delete=DELETE
+6.  Contient des secrets (SECRET_KEY) qui ne doivent pas etre publics
+7.  Autoriser les requetes entre ports/domaines differents
+8.  req.body serait undefined dans toutes les routes POST/PATCH
+9.  Si le token est expire (champ exp dans le payload)
+10. Quiconque decode le token peut lire le payload → ne jamais y mettre de secrets
+11. Lit le header, divise par espace, prend le 2eme element (le token sans "Bearer")
+12. Pour l isolation des donnees : chaque user ne voit que ses propres taches
+13. Pour ne pas reveler si l email existe dans la base (securite)
+14. Verifie l ID ET que la tache appartient bien a cet utilisateur (securite)
+15. Les deux utilisent la meme SECRET_KEY pour signer/verifier → meme resultat
+```
+
+---
+
+## RESUME FINAL
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    SCHEMA GLOBAL DU PROJET                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   NAVIGATEUR ──► http://localhost:3000 (api.js)                 │
+│        │         └── Sert public/index.html                     │
+│        │                                                        │
+│        ├──► POST /auth/register ──► Auth Service (3001)         │
+│        │                            ├── Hashe mdp (bcrypt)      │
+│        │                            └── Sauvegarde users.json   │
+│        │                                                        │
+│        ├──► POST /auth/login    ──► Auth Service (3001)         │
+│        │        │                   ├── Verifie bcrypt           │
+│        │        │                   └── Cree token JWT           │
+│        │        │                                                │
+│        │    ◄── token JWT                                       │
+│        │                                                        │
+│        ├──► GET /tasks          ──► Tasks Service (3002)        │
+│        │    + header: Bearer token  ├── verifyToken() middleware │
+│        │                            ├── Decode JWT → userId      │
+│        │                            └── Filtre tasks par userId  │
+│        │                                                        │
+│        ├──► POST /tasks         ──► Tasks Service (3002)        │
+│        ├──► PATCH /tasks/:id    ──► Tasks Service (3002)        │
+│        └──► DELETE /tasks/:id   ──► Tasks Service (3002)        │
+│                                                                 │
+│   DONNEES PARTAGEES :                                           │
+│   data/users.json ← Auth Service ecrit                         │
+│   data/tasks.json ← Tasks Service lit et ecrit                 │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+*Documentation creee pour le cours API REST avec Architecture Microservices*
+*Compte de test : alice@email.com / password123*

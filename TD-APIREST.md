@@ -1,6 +1,6 @@
 # DOCUMENTATION COMPLETE
 # API REST avec Architecture Microservices et JWT
-# Reference pour stagiaire 206
+# Reference pour les etudiants
 
 ---
 
@@ -13,6 +13,8 @@
 5.  [Fichier package.json](#5-fichier-packagejson)
 6.  [Base de donnees JSON](#6-base-de-donnees-json)
 7.  [Fichier api.js — Serveur principal](#7-fichier-apijs--serveur-principal)
+7b. [Routeur Auth — routes/authRoutes.js](#7b-routeur-auth--routesauthroutesjs)
+7c. [Routeur Tasks — routes/taskRoutes.js](#7c-routeur-tasks--routestaskroutesjs)
 8.  [Auth Service — services/auth-service/server.js](#8-auth-service--servicesauth-serviceserverjs)
 9.  [Tasks Service — services/tasks-service/server.js](#9-tasks-service--servicestasks-serviceserverjs)
 10. [Interface web — public/index.html](#10-interface-web--publicindexhtml)
@@ -88,39 +90,64 @@ Difficile a scaler                Chaque service scalable
 ```
 apirestexercice/
 │
-├── api.js                          ← Serveur web (port 3000) : sert l IHM
+├── api.js                          ← Serveur principal (port 3000) : sert l IHM
+│                                     importe aussi routes/ pour le mode serveur unique
 │
-├── services/                       ← Dossier des microservices
+├── services/                       ← MICROSERVICES (architecture distribuee)
 │   ├── auth-service/
-│   │   └── server.js               ← Auth Service (port 3001)
+│   │   └── server.js               ← Auth Service independant (port 3001)
 │   └── tasks-service/
-│       └── server.js               ← Tasks Service (port 3002)
+│       └── server.js               ← Tasks Service independant (port 3002)
+│
+├── routes/                         ← ROUTEURS EXPRESS (utilises par api.js)
+│   ├── authRoutes.js               ← Routes /auth/register et /auth/login
+│   └── taskRoutes.js               ← Routes CRUD /tasks (avec verifyToken)
 │
 ├── data/                           ← Base de donnees JSON partagee
-│   ├── users.json                  ← Stocke les utilisateurs
-│   └── tasks.json                  ← Stocke les taches
+│   ├── users.json                  ← Stocke les utilisateurs (avec mots de passe hashes)
+│   └── tasks.json                  ← Stocke les taches de tous les utilisateurs
 │
 ├── public/                         ← Fichiers envoyes au navigateur
-│   └── index.html                  ← Interface web (IHM)
+│   └── index.html                  ← Interface web (appelle les microservices)
 │
-├── .env                            ← Variables secretes (cle JWT, port)
-├── .gitignore                      ← Fichiers exclus de Git
-├── package.json                    ← Configuration npm et dependances
+├── .env                            ← Variables secretes (SECRET_KEY, PORT)
+├── .gitignore                      ← Fichiers exclus de Git (node_modules, .env)
+├── package.json                    ← Configuration npm, dependances, scripts
 ├── README.md                       ← Guide de demarrage rapide
-├── COURS.md                        ← Cours complet Node.js / Express / JWT
-└── DOCUMENTATION.md                ← Ce fichier
+├── COURS.md                        ← Cours complet Node.js / Express / JWT / bcrypt
+└── DOCUMENTATION.md                ← Ce fichier (reference complete)
 ```
 
 ### Role de chaque fichier
 
 | Fichier | Port | Responsabilite |
 |---------|------|---------------|
-| `api.js` | 3000 | Sert uniquement l interface web HTML |
-| `auth-service/server.js` | 3001 | Inscription + Connexion + Creation JWT |
-| `tasks-service/server.js` | 3002 | CRUD des taches + Verification JWT |
+| `api.js` | 3000 | Sert l interface web + branche les routes/ |
+| `routes/authRoutes.js` | — | Routeur Express : inscription et connexion |
+| `routes/taskRoutes.js` | — | Routeur Express : CRUD taches + verifyToken |
+| `services/auth-service/server.js` | 3001 | Microservice Auth independant |
+| `services/tasks-service/server.js` | 3002 | Microservice Tasks independant |
 | `data/users.json` | — | Base de donnees des utilisateurs |
 | `data/tasks.json` | — | Base de donnees des taches |
 | `.env` | — | Cle secrete JWT et configuration |
+
+### Difference entre routes/ et services/
+
+```
+routes/                              services/
+────────────────────────────────     ────────────────────────────────────
+Routeurs Express                     Serveurs Express independants
+Importes par api.js                  Chacun tourne dans son propre processus
+Meme port que api.js (3000)          Ports separes (3001, 3002)
+Lances avec : npm start              Lances avec : npm run start:all
+Pas de CORS necessaire               CORS obligatoire (ports differents)
+
+QUAND EST UTILISE QUOI ?
+─────────────────────────────────────────────────────────
+npm start       → api.js seul → utilise routes/
+npm run start:all → 3 serveurs → l interface appelle services/ directement
+                                  les routes/ dans api.js ne sont plus utilisees
+```
 
 ---
 
@@ -410,9 +437,12 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ---- ROUTES ----
-// Ces routes sont gardees pour la compatibilite monolithique
-app.use('/auth',  authRoutes);
-app.use('/tasks', taskRoutes);
+// Brancher les routeurs definis dans le dossier routes/
+// Ces routes permettent d utiliser api.js comme serveur unique (sans microservices)
+// Quand les microservices sont utilises (npm run start:all),
+// l interface appelle directement port 3001 et 3002 → ces routes ne sont pas sollicitees
+app.use('/auth',  authRoutes);  // → routes/authRoutes.js
+app.use('/tasks', taskRoutes);  // → routes/taskRoutes.js
 
 // ---- DEMARRER LE SERVEUR ----
 const PORT = process.env.PORT || 3000;
@@ -421,6 +451,373 @@ app.listen(PORT, () => {
   console.log(`\n Serveur web → http://localhost:${PORT}`);
   console.log(`   Ouvrez votre navigateur sur http://localhost:${PORT}\n`);
 });
+```
+
+---
+
+## 7b. ROUTEUR AUTH — routes/authRoutes.js
+
+### Role
+
+Ce fichier est un **routeur Express** importe par `api.js`.
+Il definit les routes d inscription et connexion.
+Il est branche dans `api.js` avec `app.use('/auth', authRoutes)`.
+
+> Difference avec le microservice : ce fichier n est PAS un serveur independant.
+> Il s execute dans le meme processus que `api.js` sur le port 3000.
+> Le microservice `services/auth-service/server.js` fait la meme chose, mais sur son propre port (3001).
+
+### Schema de fonctionnement
+
+```
+api.js (port 3000)
+    │
+    ├── app.use('/auth', authRoutes) ← branche ce fichier
+    │
+    └── routes/authRoutes.js
+            ├── POST /auth/register  → inscription
+            └── POST /auth/login     → connexion + creation JWT
+```
+
+### Code complet — routes/authRoutes.js
+
+```javascript
+// ============================================
+// ROUTES D AUTHENTIFICATION
+// Gere l inscription et la connexion des utilisateurs
+// Importe dans api.js : app.use('/auth', authRoutes)
+// ============================================
+
+// Importer Express pour creer un routeur
+const express = require('express');
+
+// Creer un routeur Express
+// Difference avec app = express() :
+//   app    → serveur complet (port, listen...)
+//   router → juste un groupe de routes, branche sur un app
+const router = express.Router();
+
+// Importer bcryptjs pour hasher les mots de passe
+const bcrypt = require('bcryptjs');
+
+// Importer jsonwebtoken pour creer les tokens JWT
+const jwt = require('jsonwebtoken');
+
+// Importer fs.promises pour lire/ecrire les fichiers JSON
+const fs = require('fs').promises;
+
+// Chemin vers la base de donnees JSON des utilisateurs
+const USERS_FILE = './data/users.json';
+
+// ---- FONCTIONS UTILITAIRES ----
+
+// Lire tous les utilisateurs depuis users.json
+async function getUsers() {
+  const data = await fs.readFile(USERS_FILE, 'utf8');
+  return JSON.parse(data);
+}
+
+// Sauvegarder les utilisateurs dans users.json
+async function saveUsers(users) {
+  await fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2));
+}
+
+// ============================================
+// POST /auth/register - INSCRIPTION
+// ============================================
+// Corps attendu : { "email": "bob@email.com", "password": "monmdp" }
+//
+// Reponses :
+//   201 Created      → { "message": "Utilisateur cree", "id": 2 }
+//   400 Bad Request  → { "error": "Email deja utilise" }
+//   500 Server Error → { "error": "Erreur serveur" }
+// ============================================
+router.post('/register', async (req, res) => {
+  try {
+    // Extraire email et password du body
+    const { email, password } = req.body;
+
+    // Validation : les deux champs sont obligatoires
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email et mot de passe requis' });
+    }
+
+    const users = await getUsers();
+
+    // Verifier que l email n est pas deja pris
+    if (users.find(u => u.email === email)) {
+      return res.status(400).json({ error: 'Email deja utilise' });
+    }
+
+    // Hasher le mot de passe avec bcrypt (10 salt rounds)
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Creer le nouvel utilisateur
+    const newUser = {
+      id: users.length + 1,   // ID auto-incremente
+      email,
+      password: hashedPassword // JAMAIS le mot de passe en clair
+    };
+
+    users.push(newUser);
+    await saveUsers(users);
+
+    res.status(201).json({ message: 'Utilisateur cree', id: newUser.id });
+
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ============================================
+// POST /auth/login - CONNEXION
+// ============================================
+// Corps attendu : { "email": "alice@email.com", "password": "password123" }
+//
+// Reponses :
+//   200 OK           → { "message": "Connexion reussie", "token": "eyJhbG...", "userId": 1 }
+//   401 Unauthorized → { "error": "Email ou mot de passe incorrect" }
+//   500 Server Error → { "error": "Erreur serveur" }
+// ============================================
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const users = await getUsers();
+
+    // Chercher l utilisateur par email
+    const user = users.find(u => u.email === email);
+
+    // Email introuvable → message generique (ne pas reveler si l email existe)
+    if (!user) {
+      return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+    }
+
+    // Comparer le mot de passe saisi avec le hash stocke
+    const validPassword = await bcrypt.compare(password, user.password);
+
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+    }
+
+    // Creer le token JWT
+    // jwt.sign(payload, cleSecrete, options)
+    const token = jwt.sign(
+      { userId: user.id },        // Payload : seulement userId
+      process.env.SECRET_KEY,     // Cle secrete depuis .env
+      { expiresIn: '24h' }        // Expire apres 24 heures
+    );
+
+    // Renvoyer le token au client
+    res.json({
+      message: 'Connexion reussie',
+      token,           // A stocker cote client
+      userId: user.id
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// Exporter le routeur → utilise dans api.js par app.use('/auth', authRoutes)
+module.exports = router;
+```
+
+---
+
+## 7c. ROUTEUR TASKS — routes/taskRoutes.js
+
+### Role
+
+Ce fichier est un **routeur Express** importe par `api.js`.
+Il definit les 4 routes CRUD des taches + le middleware `verifyToken`.
+Il est branche dans `api.js` avec `app.use('/tasks', taskRoutes)`.
+
+### Schema de fonctionnement
+
+```
+api.js (port 3000)
+    │
+    ├── app.use('/tasks', taskRoutes) ← branche ce fichier
+    │
+    └── routes/taskRoutes.js
+            ├── verifyToken()          ← middleware de verification JWT
+            ├── GET  /tasks            → lire ses taches
+            ├── POST /tasks            → creer une tache
+            ├── PATCH  /tasks/:id      → modifier une tache
+            └── DELETE /tasks/:id     → supprimer une tache
+```
+
+### Code complet — routes/taskRoutes.js
+
+```javascript
+// ============================================
+// ROUTES DES TACHES (CRUD complet)
+// Toutes ces routes necessitent un token JWT valide
+// Importe dans api.js : app.use('/tasks', taskRoutes)
+// ============================================
+
+const express = require('express');
+const router  = express.Router();
+const jwt     = require('jsonwebtoken');
+const fs      = require('fs').promises;
+
+// Chemin vers la base de donnees JSON des taches
+const TASKS_FILE = './data/tasks.json';
+
+// ---- FONCTIONS UTILITAIRES ----
+
+async function getTasks() {
+  const data = await fs.readFile(TASKS_FILE, 'utf8');
+  return JSON.parse(data);
+}
+
+async function saveTasks(tasks) {
+  await fs.writeFile(TASKS_FILE, JSON.stringify(tasks, null, 2));
+}
+
+// ============================================
+// MIDDLEWARE : verifyToken
+// S execute AVANT chaque route protegee.
+// Lit le token JWT dans le header Authorization.
+// Si valide → ajoute req.userId → passe a la route.
+// Si invalide → bloque avec erreur 401 ou 403.
+// ============================================
+function verifyToken(req, res, next) {
+  // Lire "Authorization: Bearer eyJhbGci..."
+  // ?.split(' ')[1] → prend uniquement le token apres "Bearer "
+  const token = req.headers.authorization?.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Token manquant' });
+  }
+
+  try {
+    // Verifier la signature ET l expiration du token
+    const decoded = jwt.verify(token, process.env.SECRET_KEY);
+    // decoded = { userId: 1, iat: ..., exp: ... }
+
+    req.userId = decoded.userId; // Stocker userId pour les routes
+    next();                      // Token OK → continuer
+
+  } catch (error) {
+    return res.status(403).json({ error: 'Token invalide' });
+  }
+}
+
+// ============================================
+// GET /tasks - LIRE toutes ses taches
+// ============================================
+// Headers : Authorization: Bearer <token>
+// Reponse : { "tasks": [ { id, userId, titre, completed } ] }
+// ============================================
+router.get('/', verifyToken, async (req, res) => {
+  //           ↑ verifyToken s execute en premier
+  try {
+    const tasks = await getTasks();
+    // Filtrer : chaque utilisateur ne voit QUE ses propres taches
+    const userTasks = tasks.filter(t => t.userId === req.userId);
+    res.json({ tasks: userTasks });
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ============================================
+// POST /tasks - CREER une tache
+// ============================================
+// Headers : Authorization: Bearer <token>
+// Corps   : { "titre": "Ma nouvelle tache" }
+// Reponse : { "message": "Tache creee", "task": { ... } }
+// ============================================
+router.post('/', verifyToken, async (req, res) => {
+  try {
+    const { titre } = req.body;
+
+    if (!titre) {
+      return res.status(400).json({ error: 'Titre requis' });
+    }
+
+    const tasks = await getTasks();
+
+    const newTask = {
+      id: tasks.length + 1,
+      userId: req.userId,  // Lie la tache a l utilisateur connecte
+      titre,
+      completed: false
+    };
+
+    tasks.push(newTask);
+    await saveTasks(tasks);
+
+    res.status(201).json({ message: 'Tache creee', task: newTask });
+
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ============================================
+// PATCH /tasks/:id - MODIFIER une tache (toggle completed)
+// ============================================
+// Headers    : Authorization: Bearer <token>
+// URL exemple: PATCH /tasks/3
+// Reponse    : { "message": "Tache mise a jour", "task": { ... } }
+// ============================================
+router.patch('/:id', verifyToken, async (req, res) => {
+  try {
+    const taskId = parseInt(req.params.id); // "3" (string) → 3 (number)
+    const tasks  = await getTasks();
+
+    // Double securite : ID correct ET appartient a cet utilisateur
+    const task = tasks.find(t => t.id === taskId && t.userId === req.userId);
+
+    if (!task) {
+      return res.status(404).json({ error: 'Tache non trouvee' });
+    }
+
+    task.completed = !task.completed; // Toggle : false→true ou true→false
+
+    await saveTasks(tasks);
+    res.json({ message: 'Tache mise a jour', task });
+
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ============================================
+// DELETE /tasks/:id - SUPPRIMER une tache
+// ============================================
+// Headers    : Authorization: Bearer <token>
+// URL exemple: DELETE /tasks/3
+// Reponse    : { "message": "Tache supprimee" }
+// ============================================
+router.delete('/:id', verifyToken, async (req, res) => {
+  try {
+    const taskId = parseInt(req.params.id);
+    let tasks    = await getTasks();
+
+    // findIndex() retourne la position ou -1 si non trouve
+    const index = tasks.findIndex(t => t.id === taskId && t.userId === req.userId);
+
+    if (index === -1) {
+      return res.status(404).json({ error: 'Tache non trouvee' });
+    }
+
+    tasks.splice(index, 1); // Supprimer 1 element a la position index
+
+    await saveTasks(tasks);
+    res.json({ message: 'Tache supprimee' });
+
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// Exporter le routeur → utilise dans api.js par app.use('/tasks', taskRoutes)
+module.exports = router;
 ```
 
 ---
@@ -950,6 +1347,401 @@ fetch(`${AUTH_URL}/auth/login`, {
 fetch(`${TASKS_URL}/tasks`, {
   headers: { 'Authorization': `Bearer ${token}` }
 });
+```
+
+### Code complet — public/index.html
+
+```html
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API REST avec JWT - Interface de Demonstration</title>
+    <style>
+        /* Style minimaliste noir et blanc */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: white;
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .container { background: white; border: 2px solid black; padding: 30px; }
+
+        h1 {
+            color: black; text-align: center; margin-bottom: 10px;
+            font-size: 24px; border-bottom: 2px solid black; padding-bottom: 10px;
+        }
+
+        .subtitle { text-align: center; color: black; margin-bottom: 30px; font-size: 14px; }
+
+        .tabs { display: flex; gap: 10px; margin-bottom: 30px; border: 2px solid black; }
+        .tab { flex: 1; padding: 12px; border: none; background: white; cursor: pointer; font-size: 16px; font-weight: bold; }
+        .tab.active { background: black; color: white; }
+
+        .section { display: none; }
+        .section.active { display: block; }
+
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; font-size: 14px; }
+
+        input[type="email"],
+        input[type="password"],
+        input[type="text"] { width: 100%; padding: 10px; border: 2px solid black; font-size: 16px; }
+
+        button {
+            width: 100%; padding: 12px; border: 2px solid black;
+            font-size: 16px; font-weight: bold; cursor: pointer; background: white; color: black;
+        }
+        button:hover { background: black; color: white; }
+
+        .message { padding: 15px; margin-bottom: 20px; font-size: 14px; display: none; border: 2px solid black; }
+        .message.show { display: block; }
+
+        .token-display {
+            background: white; border: 2px solid black; padding: 15px; margin: 20px 0;
+            word-break: break-all; font-family: 'Courier New', monospace; font-size: 11px;
+        }
+
+        .task-list { margin-top: 20px; }
+        .task-item {
+            background: white; border: 2px solid black; padding: 15px; margin-bottom: 10px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .task-item.completed .task-title { text-decoration: line-through; }
+        .task-title { flex: 1; font-size: 16px; }
+        .task-actions { display: flex; gap: 10px; }
+
+        .btn-toggle { padding: 8px 12px; font-size: 14px; width: auto; }
+        .btn-danger  { padding: 8px 12px; font-size: 14px; width: auto; }
+
+        .info-box { background: white; border: 2px solid black; padding: 15px; margin-top: 20px; font-size: 13px; }
+        .info-box strong { text-decoration: underline; }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <h1>API REST - Microservices</h1>
+    <p class="subtitle">2 services independants qui tournent en parallele</p>
+
+    <!-- Indicateur des 2 microservices -->
+    <div style="display:flex; gap:10px; margin-bottom:20px;">
+        <div style="flex:1; border:2px solid black; padding:10px; font-size:12px;">
+            <strong>AUTH SERVICE - Port 3001</strong><br>
+            POST /auth/register<br>
+            POST /auth/login
+        </div>
+        <div style="flex:1; border:2px solid black; padding:10px; font-size:12px;">
+            <strong>TASKS SERVICE - Port 3002</strong><br>
+            GET / POST /tasks<br>
+            PATCH / DELETE /tasks/:id
+        </div>
+    </div>
+
+    <div class="message" id="message"></div>
+
+    <!-- Onglets -->
+    <div class="tabs">
+        <button class="tab active" onclick="showSection('auth')">AUTHENTIFICATION</button>
+        <button class="tab" onclick="showSection('tasks')" id="tasksTab" style="display:none;">MES TACHES</button>
+    </div>
+
+    <!-- Section Authentification -->
+    <div id="auth" class="section active">
+        <div class="form-group">
+            <label for="email">Email :</label>
+            <input type="email" id="email" placeholder="alice@email.com" />
+        </div>
+        <div class="form-group">
+            <label for="password">Mot de passe :</label>
+            <input type="password" id="password" placeholder="password123" />
+        </div>
+        <button onclick="login()">SE CONNECTER</button>
+        <button style="margin-top:10px;" onclick="register()">CREER UN COMPTE</button>
+    </div>
+
+    <!-- Section Taches -->
+    <div id="tasks" class="section">
+
+        <!-- Affiche le token JWT recu du serveur (pour l apprentissage) -->
+        <div class="token-display" id="tokenDisplay"></div>
+
+        <div class="form-group">
+            <label for="taskTitle">Nouvelle tache :</label>
+            <input type="text" id="taskTitle" placeholder="Faire les courses" />
+        </div>
+        <button onclick="createTask()">AJOUTER LA TACHE</button>
+
+        <!-- Liste des taches chargee depuis Tasks Service -->
+        <div class="task-list" id="taskList"></div>
+
+        <button style="margin-top:20px;" onclick="logout()">SE DECONNECTER</button>
+
+        <div class="info-box">
+            <strong>Ce qui se passe en coulisses :</strong><br>
+            - Le token JWT est envoye dans le header Authorization<br>
+            - Le serveur verifie le token avant chaque requete<br>
+            - Vous voyez seulement VOS taches (grace au userId dans le token)
+        </div>
+    </div>
+</div>
+
+<script>
+    // Variables globales : token et userId stockes en memoire (JavaScript)
+    let token  = null;
+    let userId = null;
+
+    // ===================================================================
+    // MICROSERVICES : 2 URL differentes car 2 serveurs differents !
+    // L interface appelle directement chaque service sur son propre port.
+    // ===================================================================
+    const AUTH_URL  = 'http://localhost:3001';  // Auth Service (inscription/connexion)
+    const TASKS_URL = 'http://localhost:3002';  // Tasks Service (gestion des taches)
+
+    // Afficher un message dans la barre de notification
+    function showMessage(text, type) {
+        const div = document.getElementById('message');
+        div.textContent = text;
+        div.className = `message ${type} show`;
+        setTimeout(() => div.classList.remove('show'), 5000);
+    }
+
+    // Changer d onglet (Authentification <-> Mes Taches)
+    function showSection(section) {
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.getElementById(section).classList.add('active');
+        event.target.classList.add('active');
+    }
+
+    // -------------------------------------------------------------------
+    // INSCRIPTION : POST http://localhost:3001/auth/register
+    // -------------------------------------------------------------------
+    async function register() {
+        const email    = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+
+        if (!email || !password) {
+            showMessage('[ERREUR] Veuillez remplir tous les champs', 'error');
+            return;
+        }
+
+        try {
+            // fetch() envoie une requete HTTP vers Auth Service
+            const response = await fetch(`${AUTH_URL}/auth/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })  // Convertit en JSON
+            });
+
+            const data = await response.json();  // Lit la reponse JSON
+
+            if (response.ok) {
+                showMessage('[SUCCES] ' + data.message + ' ! Vous pouvez vous connecter.', 'success');
+            } else {
+                showMessage('[ERREUR] ' + data.error, 'error');
+            }
+        } catch (error) {
+            showMessage('[ERREUR] Impossible de contacter le serveur. Auth Service est-il demarre ?', 'error');
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // CONNEXION : POST http://localhost:3001/auth/login
+    // → Recoit un token JWT que l on stocke dans la variable 'token'
+    // -------------------------------------------------------------------
+    async function login() {
+        const email    = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+
+        if (!email || !password) {
+            showMessage('[ERREUR] Veuillez remplir tous les champs', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${AUTH_URL}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                // Stocker le token et le userId dans les variables globales
+                token  = data.token;
+                userId = data.userId;
+
+                // Afficher le token pour l apprentissage
+                document.getElementById('tokenDisplay').innerHTML = `
+                    <strong>Votre Token JWT :</strong><br>
+                    ${token.substring(0, 60)}...<br>
+                    <small>Ce token prouve votre identite pour les 24 prochaines heures</small>
+                `;
+
+                // Afficher l onglet Mes Taches
+                document.getElementById('tasksTab').style.display = 'block';
+                document.querySelector('[onclick="showSection(\'tasks\')"]').click();
+                showMessage('[SUCCES] ' + data.message + ' ! Bienvenue !', 'success');
+                loadTasks();
+            } else {
+                showMessage('[ERREUR] ' + data.error, 'error');
+            }
+        } catch (error) {
+            showMessage('[ERREUR] Impossible de contacter le serveur.', 'error');
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // CHARGER LES TACHES : GET http://localhost:3002/tasks
+    // → Envoie le token dans le header Authorization
+    // -------------------------------------------------------------------
+    async function loadTasks() {
+        try {
+            const response = await fetch(`${TASKS_URL}/tasks`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`  // Token obligatoire !
+                }
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                displayTasks(data.tasks);
+            } else {
+                showMessage('[ERREUR] ' + data.error, 'error');
+            }
+        } catch (error) {
+            showMessage('[ERREUR] Impossible de charger les taches.', 'error');
+        }
+    }
+
+    // Afficher les taches dans la liste HTML
+    function displayTasks(tasks) {
+        const taskListDiv = document.getElementById('taskList');
+
+        if (tasks.length === 0) {
+            taskListDiv.innerHTML = '<p style="text-align:center;padding:20px;font-style:italic;">Aucune tache. Creez-en une !</p>';
+            return;
+        }
+
+        taskListDiv.innerHTML = tasks.map(task => `
+            <div class="task-item ${task.completed ? 'completed' : ''}">
+                <span class="task-title">${task.titre}</span>
+                <div class="task-actions">
+                    <button class="btn-toggle" onclick="toggleTask(${task.id})">
+                        ${task.completed ? 'ANNULER' : 'TERMINER'}
+                    </button>
+                    <button class="btn-danger" onclick="deleteTask(${task.id})">SUPPRIMER</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // -------------------------------------------------------------------
+    // CREER UNE TACHE : POST http://localhost:3002/tasks
+    // -------------------------------------------------------------------
+    async function createTask() {
+        const titre = document.getElementById('taskTitle').value;
+
+        if (!titre) {
+            showMessage('[ERREUR] Veuillez entrer un titre', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${TASKS_URL}/tasks`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ titre })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                showMessage('[SUCCES] ' + data.message, 'success');
+                document.getElementById('taskTitle').value = '';
+                loadTasks();  // Recharger la liste
+            } else {
+                showMessage('[ERREUR] ' + data.error, 'error');
+            }
+        } catch (error) {
+            showMessage('[ERREUR] Erreur lors de la creation.', 'error');
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // MODIFIER UNE TACHE : PATCH http://localhost:3002/tasks/:id
+    // → Inverse l etat completed (false → true, true → false)
+    // -------------------------------------------------------------------
+    async function toggleTask(id) {
+        try {
+            const response = await fetch(`${TASKS_URL}/tasks/${id}`, {
+                method: 'PATCH',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                loadTasks();  // Recharger la liste
+            } else {
+                showMessage('[ERREUR] ' + data.error, 'error');
+            }
+        } catch (error) {
+            showMessage('[ERREUR] Erreur lors de la modification.', 'error');
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // SUPPRIMER UNE TACHE : DELETE http://localhost:3002/tasks/:id
+    // -------------------------------------------------------------------
+    async function deleteTask(id) {
+        if (!confirm('Etes-vous sur de vouloir supprimer cette tache ?')) return;
+
+        try {
+            const response = await fetch(`${TASKS_URL}/tasks/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                showMessage('[SUCCES] ' + data.message, 'success');
+                loadTasks();
+            } else {
+                showMessage('[ERREUR] ' + data.error, 'error');
+            }
+        } catch (error) {
+            showMessage('[ERREUR] Erreur lors de la suppression.', 'error');
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // DECONNEXION : efface le token de la memoire
+    // -------------------------------------------------------------------
+    function logout() {
+        token  = null;
+        userId = null;
+        document.getElementById('tasksTab').style.display = 'none';
+        document.querySelector('[onclick="showSection(\'auth\')"]').click();
+        showMessage('[INFO] Vous etes deconnecte', 'info');
+        document.getElementById('email').value    = '';
+        document.getElementById('password').value = '';
+    }
+</script>
+</body>
+</html>
 ```
 
 ---
